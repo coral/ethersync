@@ -38,6 +38,13 @@ fn udp_readiness_is_rearmed_after_draining() {
             }
         }
     }
+    endpoint.step(Instant::now()).unwrap();
+    poll.poll(&mut events, Some(Duration::from_millis(30)))
+        .unwrap();
+    assert!(
+        events.is_empty(),
+        "idle UDP socket must not stay writable-ready"
+    );
 }
 
 #[test]

@@ -523,6 +523,7 @@ pub struct Endpoint {
     order: Vec<ConnectionHandle>,
     send_buffers: Vec<Vec<u8>>,
     write_blocked: bool,
+    registration: Option<(mio::Registry, mio::Token)>,
 }
 impl Endpoint {
     pub fn new(
@@ -555,14 +556,34 @@ impl Endpoint {
             order: Vec::new(),
             send_buffers: Vec::new(),
             write_blocked: false,
+            registration: None,
         })
     }
     pub fn register(&mut self, registry: &mio::Registry, token: mio::Token) -> io::Result<()> {
-        registry.register(
-            &mut self.socket,
-            token,
-            mio::Interest::READABLE.add(mio::Interest::WRITABLE),
-        )
+        let owned_registry = registry.try_clone()?;
+        let interest = self.interest();
+        registry.register(&mut self.socket, token, interest)?;
+        self.registration = Some((owned_registry, token));
+        Ok(())
+    }
+    fn interest(&self) -> mio::Interest {
+        // On Windows, try_io re-arms all registered interests after WouldBlock.
+        // A normally writable UDP socket would otherwise keep waking idle workers.
+        if self.write_blocked {
+            mio::Interest::READABLE.add(mio::Interest::WRITABLE)
+        } else {
+            mio::Interest::READABLE
+        }
+    }
+    fn set_write_blocked(&mut self, blocked: bool) -> io::Result<()> {
+        if self.write_blocked != blocked {
+            self.write_blocked = blocked;
+            if let Some((registry, token)) = &self.registration {
+                let interest = self.interest();
+                registry.reregister(&mut self.socket, *token, interest)?;
+            }
+        }
+        Ok(())
     }
     pub fn local_addr(&self) -> io::Result<SocketAddr> {
         self.socket.local_addr()
@@ -788,7 +809,7 @@ impl Endpoint {
             {
                 Ok(()) => {
                     if self.write_blocked {
-                        self.write_blocked = false;
+                        self.set_write_blocked(false)?;
                         for c in self.connections.values() {
                             c.needs_pass.set(true);
                         }
@@ -800,7 +821,7 @@ impl Endpoint {
                     }
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    self.write_blocked = true;
+                    self.set_write_blocked(true)?;
                     break;
                 }
                 Err(e) => return Err(e),
