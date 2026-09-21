@@ -27,7 +27,7 @@ jobs:
       - run: python scripts/smoke_examples.py
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.25.x'
+          go-version: '1.26.7'
       - name: Validate workflows and schema
         run: |
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12

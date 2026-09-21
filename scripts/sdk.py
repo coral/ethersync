@@ -24,7 +24,8 @@ TARGETS = (
 def run(*args, cwd=ROOT, env=None, capture=False, timeout=None):
     print("+", " ".join(map(str, args)), flush=True)
     return subprocess.run(list(map(str, args)), cwd=cwd, env=env, check=True,
-                          text=True, stdout=subprocess.PIPE if capture else None, timeout=timeout).stdout
+                          text=True, encoding="utf-8", stdout=subprocess.PIPE if capture else None,
+                          timeout=timeout).stdout
 
 
 def version():

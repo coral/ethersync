@@ -8,7 +8,7 @@
     "wasm": "node scripts/build-wasm.mjs",
     "dev": "pnpm wasm && vite --host 127.0.0.1",
     "build": "pnpm wasm && tsc --noEmit && vite build",
-    "check": "tsc --noEmit",
+    "check": "pnpm wasm && tsc --noEmit",
     "test": "pnpm wasm && node --test tests/*.test.mjs",
     "measure": "pnpm wasm && node scripts/measure-accuracy.mjs",
     "replay": "pnpm wasm && node scripts/replay-trace.mjs",
