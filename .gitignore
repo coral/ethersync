@@ -1,6 +1,81 @@
-/target
+# Rust build output (including nested SDK source builds).
+target/
+**/*.rs.bk
 
-/dist
+# Packaged SDKs and generated C/C++/Swift/C# bindings.
+dist/
+ethersync-generated/
 
-/clients/csharp/**/bin/
-/clients/csharp/**/obj/
+# Native compilation and CMake build output.
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+.cache/clangd/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+
+# Swift Package Manager and Xcode artifacts.
+.build/
+DerivedData/
+*.xcframework/
+*.dSYM/
+*.swiftmodule
+*.swiftdoc
+*.swiftsourceinfo
+xcuserdata/
+*.xcuserstate
+
+# .NET binding consumers and local IDE state.
+/clients/csharp/**/[Bb]in/
+/clients/csharp/**/[Oo]bj/
+*.nupkg
+*.snupkg
+.vs/
+*.suo
+*.user
+
+# JavaScript dependencies and caches; WASM outputs are in web/.gitignore.
+node_modules/
+.pnpm-store/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+
+# Python tooling.
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Local environment files (keep example configuration shareable).
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# OS metadata and editor temporary files.
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
