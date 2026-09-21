@@ -88,6 +88,7 @@ pub struct Reading {
     pub offset_upper_ns: f64,
     pub offset_evidence_reference_ns: u64,
     pub offset_evidence_samples: u32,
+    pub accepted_observations: u64,
 }
 impl From<timeline::Reading> for Reading {
     fn from(r: timeline::Reading) -> Self {
@@ -122,6 +123,7 @@ impl From<timeline::Reading> for Reading {
             offset_upper_ns: s.offset_evidence.map_or(0., |e| e.upper_ns),
             offset_evidence_reference_ns: s.offset_evidence.map_or(0, |e| e.reference_ns),
             offset_evidence_samples: s.offset_evidence.map_or(0, |e| e.samples),
+            accepted_observations: s.accepted_observations,
         }
     }
 }
@@ -175,6 +177,47 @@ pub fn core_read_for_presentation(core: &Core, now_ns: u64, delay_ns: u64) -> Re
         .evaluate_for_presentation(now_ns, delay_ns)
         .map_err(error)?
         .into())
+}
+
+/// Owned timing state. Capture/copy returns a new foreign allocation; capture_into
+/// reuses an existing handle. Evaluation never refreshes the captured lifecycle state.
+pub struct TimecodeSnapshot {
+    inner: protocol::TimecodeSnapshot,
+}
+pub fn timecode_snapshot_new() -> TimecodeSnapshot {
+    TimecodeSnapshot {
+        inner: Default::default(),
+    }
+}
+pub fn timecode_snapshot_copy(snapshot: &TimecodeSnapshot) -> TimecodeSnapshot {
+    TimecodeSnapshot {
+        inner: snapshot.inner,
+    }
+}
+pub fn timecode_snapshot_read(snapshot: &TimecodeSnapshot, now_ns: u64) -> Reading {
+    snapshot.inner.evaluate(now_ns).into()
+}
+pub fn timecode_snapshot_read_for_presentation(
+    snapshot: &TimecodeSnapshot,
+    now_ns: u64,
+    delay_ns: u64,
+) -> Result<Reading> {
+    Ok(snapshot
+        .inner
+        .evaluate_for_presentation(now_ns, delay_ns)
+        .map_err(error)?
+        .into())
+}
+pub fn timecode_snapshot_next_boundary(snapshot: &TimecodeSnapshot, now_ns: u64) -> Boundary {
+    boundary(snapshot.inner.next_boundary(now_ns))
+}
+pub fn core_snapshot(core: &Core) -> TimecodeSnapshot {
+    TimecodeSnapshot {
+        inner: core.core.view.into(),
+    }
+}
+pub fn core_snapshot_into(core: &Core, snapshot: &mut TimecodeSnapshot) {
+    snapshot.inner = core.core.view.into();
 }
 
 #[cfg(feature = "native")]
@@ -405,6 +448,16 @@ pub fn reader_read(reader: &mut Reader) -> Reading {
 #[cfg(feature = "native")]
 pub fn reader_read_at(reader: &mut Reader, now_ns: u64) -> Reading {
     reader.inner.read_at(now_ns).into()
+}
+#[cfg(feature = "native")]
+pub fn reader_snapshot(reader: &mut Reader) -> TimecodeSnapshot {
+    TimecodeSnapshot {
+        inner: reader.inner.snapshot(),
+    }
+}
+#[cfg(feature = "native")]
+pub fn reader_snapshot_into(reader: &mut Reader, snapshot: &mut TimecodeSnapshot) {
+    snapshot.inner = reader.inner.snapshot();
 }
 #[cfg(feature = "native")]
 pub fn reader_read_for_presentation(
@@ -677,6 +730,7 @@ pub struct EventData {
     pub offset_ns: f64,
     pub drift_ppm: f64,
     pub uncertainty_ns: f64,
+    pub accepted_observations: u64,
 }
 #[cfg(feature = "native")]
 pub fn leader_event(leader: &Leader) -> Event {
@@ -730,6 +784,7 @@ pub fn event_data(event: &Event) -> EventData {
             data.offset_ns = o.mapping.offset_ns;
             data.drift_ppm = o.mapping.drift * 1e6;
             data.uncertainty_ns = o.mapping.uncertainty_ns;
+            data.accepted_observations = o.mapping.accepted_observations;
         }
         Some(libethersync::Event::SourceHealth(health)) => {
             data.kind = 4;
@@ -935,4 +990,29 @@ pub fn leader_endpoint(leader: &Leader) -> Endpoint {
     Endpoint {
         inner: leader.inner.info().address,
     }
+}
+
+/// Stable owned result of one local interface enumeration.
+#[cfg(feature = "native")]
+pub struct EndpointList {
+    inner: Vec<std::net::SocketAddr>,
+}
+#[cfg(feature = "native")]
+pub fn leader_local_endpoints(leader: &Leader) -> Result<EndpointList> {
+    Ok(EndpointList {
+        inner: leader.inner.info().local_endpoints().map_err(error)?,
+    })
+}
+#[cfg(feature = "native")]
+pub fn endpoint_list_count(list: &EndpointList) -> u32 {
+    list.inner.len() as u32
+}
+#[cfg(feature = "native")]
+pub fn endpoint_list_get(list: &EndpointList, index: u32) -> Result<Endpoint> {
+    Ok(Endpoint {
+        inner: *list
+            .inner
+            .get(index as usize)
+            .ok_or("endpoint index out of range")?,
+    })
 }

@@ -262,6 +262,7 @@ fn leader_view(t: Timeline, now: u64) -> View {
             uncertainty_ns: 0.,
             last_sample_ns: now,
             converged: true,
+            accepted_observations: 0,
             evidence: None,
         },
         connection: ConnectionState::Connected,

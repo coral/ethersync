@@ -15,11 +15,19 @@ using (var core = new Core())
 {
     var initial = core.Read(123);
     Check(initial.Frames == 0 && initial.FpsNumerator == 30 && initial.Synchronization == Synchronization.Uninitialized, "fallback");
+    using var captured = core.Snapshot();
+    using var snapshot = new TimecodeSnapshot();
+    core.SnapshotInto(snapshot);
+    using var copied = snapshot.Copy();
+    Check(copied.Read(123).AcceptedObservations == 0, "snapshot count");
+    Check(!copied.NextBoundary(123).Valid, "fallback snapshot boundary");
+    Check(copied.ReadForPresentation(123, TimeSpan.FromMilliseconds(1)).Frames == initial.Frames, "snapshot presentation");
     try { core.State(new byte[] {255}, 123); throw new Exception("bad protobuf accepted"); }
     catch (EthersyncException e) { Check(e.Status != 0 && e.Message.Length > 0, "managed error"); }
     core.Connected();
     Check(core.Probe(1_000_000).Length > 0, "owned byte output");
     core.Dispose();
+    Check(copied.Read(123).Frames == initial.Frames, "snapshot owns state");
     try { core.Read(0); throw new Exception("disposed handle accepted"); }
     catch (ObjectDisposedException) { }
 }
@@ -30,8 +38,10 @@ using (var core = Core.Configured(long.MaxValue - 100, uint.MaxValue, 30, 1, fal
     try { core.ReadForPresentation(0, TimeSpan.FromTicks(-1)); throw new Exception("negative delay accepted"); }
     catch (ArgumentOutOfRangeException) { }
     for (int i=0;i<10_000;i++) core.Read(0);
+    using var reusable = new TimecodeSnapshot();
+    for (int i=0;i<10_000;i++) { core.SnapshotInto(reusable); reusable.Read(0); }
     long before=GC.GetAllocatedBytesForCurrentThread();
-    for (int i=0;i<100_000;i++) core.Read((ulong)i);
+    for (int i=0;i<100_000;i++) { core.Read((ulong)i); core.SnapshotInto(reusable); reusable.Read((ulong)i); }
     Check(GC.GetAllocatedBytesForCurrentThread()==before, "reads allocate managed memory");
 }
 #if ETHERSYNC_NATIVE
@@ -43,6 +53,15 @@ using var leader = engine.Leader(options);
 leader.Seek(-7, 0x80000000);
 using var reader = leader.Reader();
 Check(reader.Read().Frames == -7 && reader.Read().Subframe == 0x80000000, "native Q32");
+using var saved = reader.Snapshot();
+using var reusableNative = new TimecodeSnapshot();
+reader.SnapshotInto(reusableNative);
+using var endpoints = leader.LocalEndpoints();
+Check(endpoints.Count() == 1, "specific listener endpoint");
+using var firstEndpoint = endpoints.Get(0);
+Check(firstEndpoint.Port() > 0, "listener port");
+try { using var invalidEndpoint = endpoints.Get(endpoints.Count()); throw new Exception("endpoint bounds accepted"); }
+catch (EthersyncException) { }
 using var endpoint = leader.Endpoint();
 using var followOptions = new FollowerOptions(endpoint.ToIPEndPoint());
 followOptions.Pin(leader.Fingerprint());
@@ -59,6 +78,7 @@ while(remote.Read().Synchronization != Synchronization.Synchronized)
     Thread.Sleep(10);
 }
 Check(remote.Read().Frames == -7 && remote.Read().Subframe == 0x80000000, "follower reading");
+Check(remote.Read().AcceptedObservations >= 12, "accepted observation count");
 Console.WriteLine(remote.Read().Timecode);
 using var ipv6=Endpoint.From(new IPEndPoint(IPAddress.Parse("fe80::1%7"),4443));
 Check(ipv6.ToIPEndPoint().Address.ScopeId == 7,"IPv6 scope");
@@ -76,6 +96,7 @@ for (int i=0;i<100;i++) {
 follower.Reconnect();
 follower.Shutdown();
 engine.Shutdown();
+Check(saved.Read(123).Frames == -7, "snapshot survives shutdown");
 #endif
 Console.WriteLine("C# wrappers passed");
 

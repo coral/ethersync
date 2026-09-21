@@ -65,6 +65,10 @@ public sealed partial class Core
 {
     public Reading ReadForPresentation(ulong nowNs, TimeSpan delay) => ReadForPresentation(nowNs, Durations.Nanoseconds(delay));
 }
+public sealed partial class TimecodeSnapshot
+{
+    public Reading ReadForPresentation(ulong nowNs, TimeSpan delay) => ReadForPresentation(nowNs, Durations.Nanoseconds(delay));
+}
 internal static class Durations
 {
     internal static ulong Nanoseconds(TimeSpan value)

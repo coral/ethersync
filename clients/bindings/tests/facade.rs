@@ -54,14 +54,23 @@ fn exact_large_position_and_allocation_free_portable_reads() {
     let value = core_read(&core, 0);
     assert_eq!(value.frames, i64::MAX - 7);
     assert_eq!(value.subframe, u32::MAX);
+    let mut snapshot = timecode_snapshot_new();
+    let copy = timecode_snapshot_copy(&core_snapshot(&core));
     COUNT.with(|c| c.set(0));
     ENABLED.with(|c| c.set(true));
     for i in 0..100_000 {
         std::hint::black_box(core_read(&core, i));
         std::hint::black_box(core_next_boundary(&core, i));
+        core_snapshot_into(&core, &mut snapshot);
+        std::hint::black_box(timecode_snapshot_read(&snapshot, i));
+        std::hint::black_box(timecode_snapshot_read_for_presentation(&snapshot, i, 1).unwrap());
+        std::hint::black_box(timecode_snapshot_next_boundary(&snapshot, i));
     }
     ENABLED.with(|c| c.set(false));
     assert_eq!(COUNT.with(Cell::get), 0);
+    drop(core);
+    assert_eq!(timecode_snapshot_read(&copy, 100).frames, i64::MAX - 7);
+    assert!(timecode_snapshot_read_for_presentation(&copy, i64::MAX as u64, 1).is_err());
 }
 #[cfg(feature = "native")]
 #[test]
@@ -71,6 +80,9 @@ fn control_acknowledges_reader_publication_and_children_own_engine() {
     leader_options_advertise(&mut options, false);
     let leader = engine_leader(&engine, &options).unwrap();
     let mut reader = leader_reader(&leader).unwrap();
+    let endpoints = leader_local_endpoints(&leader).unwrap();
+    assert!(endpoint_list_count(&endpoints) > 0);
+    assert!(endpoint_list_get(&endpoints, endpoint_list_count(&endpoints)).is_err());
     drop(engine); // The leader retains its worker owner.
     for frame in 1..1000 {
         leader_seek(&leader, frame, 0x12345678).unwrap();
@@ -78,14 +90,22 @@ fn control_acknowledges_reader_publication_and_children_own_engine() {
         assert_eq!(r.frames, frame);
         assert_eq!(r.subframe, 0x12345678);
     }
+    let mut snapshot = reader_snapshot(&mut reader);
+    let copied = timecode_snapshot_copy(&snapshot);
+    leader_seek(&leader, -7, 0x80000000).unwrap();
     COUNT.with(|c| c.set(0));
     ENABLED.with(|c| c.set(true));
     for _ in 0..100_000 {
         std::hint::black_box(reader_read(&mut reader));
+        reader_snapshot_into(&mut reader, &mut snapshot);
+        std::hint::black_box(timecode_snapshot_read(&snapshot, 0));
     }
     ENABLED.with(|c| c.set(false));
     assert_eq!(COUNT.with(Cell::get), 0);
     leader_shutdown(&leader).unwrap();
+    drop((reader, leader));
+    assert_eq!(timecode_snapshot_read(&copied, 0).frames, 999);
+    assert_eq!(timecode_snapshot_read(&snapshot, 0).frames, -7);
 }
 
 #[cfg(feature = "native")]

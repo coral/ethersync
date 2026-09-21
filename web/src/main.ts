@@ -21,7 +21,7 @@ interface Reading {
   uncertaintyMs: number; sampleAgeMs: number; offsetMs: number; driftPpm: number;
   mappedLeaderMs: number; correctionFrames: number;
   offsetEvidence?: { lowerMs: number; upperMs: number; consistent: boolean; samples: number };
-  discontinuity: string; event: string;
+  acceptedObservations: string; discontinuity: string; event: string;
 }
 const fmt = (n: number, unit: string, digits = 3) => Number.isFinite(n) ? `${n.toFixed(digits)} ${unit}` : '—';
 try {

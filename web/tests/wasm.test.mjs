@@ -48,6 +48,51 @@ test('actual WASM decodes golden fixture, validates version, size, timestamps', 
     assert.throws(()=>f.reply(new Uint8Array(513),time), /512/);
   } finally { f.free(); }
 });
+
+test('WASM counts acquisitions independently of retained history', () => {
+  const f = new Follower();
+  try {
+    assert.equal(f.read(0).acceptedObservations, '0');
+    f.connected(); f.snapshot(state(), 1);
+    let now = sync(f);
+    assert.equal(f.read(now).acceptedObservations, '25');
+    for (let i=0; i<8; i++) now = sync(f, 5000, 3000+i*1300);
+    assert.equal(f.read(now).acceptedObservations, '225');
+    assert.equal(f.clock_trace().length, 128);
+    assert.equal(f.clock_trace().at(-1).acceptedObservations, '225');
+    assert.equal(f.read(now).offsetEvidence.samples, 128);
+    f.disconnected();
+    assert.equal(f.read(now+5000).acceptedObservations, '225');
+    f.connected(); f.snapshot(state({rev:2}), now+5001);
+    assert.equal(f.read(now+5001).acceptedObservations, '225');
+    f.connected(); f.snapshot(state({session:2}), now+5002);
+    assert.equal(f.read(now+5002).acceptedObservations, '0');
+  } finally { f.free(); }
+});
+
+test('WASM frozen snapshots predict without mutating or retaining their follower', () => {
+  const f = new Follower();
+  f.connected(); f.snapshot(state({speed:-1}), 1);
+  const now = sync(f);
+  const at = BigInt(Math.round((now+5000+50)*1e6));
+  f.snapshot(state({rev:2,speed:-1,scheduled:[{disc:1,time:at,frames:42,speed:0}]}),now);
+  const reading = f.read(now);
+  const frozen = f.capture_snapshot();
+  try {
+    assert.deepEqual(frozen.read(now), reading);
+    assert.deepEqual(frozen.next_boundary(now), f.next_boundary(now));
+    assert.equal(frozen.read_for_presentation(now,100).frames,42);
+    assert.deepEqual(f.read(now), reading);
+    assert.throws(()=>frozen.read(NaN), /timestamp/);
+    assert.throws(()=>frozen.read_for_presentation(now,-1), /timestamp/);
+    assert.throws(()=>frozen.read_for_presentation(9_223_372_036_854,1), /timestamp/);
+    f.disconnected();
+    assert.equal(f.read(now).connection,'Disconnected');
+    f.free();
+    assert.deepEqual(frozen.read(now), reading);
+    assert.equal(frozen.read(now+100).frames,42);
+  } finally { frozen.free(); }
+});
 test('WASM extrapolates signed motion, rejects stale state, latches scheduled control and holds indefinitely', () => {
   const f = new Follower();
   try {

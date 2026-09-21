@@ -4,6 +4,71 @@ These additions live in `ethersync-protocol` and are shared by native and WASM c
 They do not change the protobuf schema, the four-timestamp exchange, or the current point
 estimator. They add local scheduling and evidence needed to evaluate further algorithm changes.
 
+## Application timestamps and immutable snapshots
+
+Native `MonotonicClock::ns_at(instant)` converts a `std::time::Instant` into the engine's
+nanosecond domain using its exact stored origin. It returns `None` for marks captured before
+engine creation or beyond the supported `i64::MAX` nanosecond range, and `Some(0)` at the
+origin. It does not sample two clocks or introduce a clock-pairing error. The supplied Instant
+must already represent the event being timed; conversion does not remove error from an audio
+device's own clock bridge. Foreign native callers continue supplying engine-relative
+nanoseconds; core-only and browser callers retain their application-provided monotonic epoch.
+
+```rust,ignore
+let clock = engine.clock();
+let snapshot = reader.snapshot();
+for mark in marks {
+    if let Some(ns) = clock.ns_at(mark) {
+        let reading = snapshot.evaluate(ns);
+        // Resolve each mark against the same captured clock and timeline.
+    }
+}
+```
+
+`TimecodeReader::snapshot()` returns a `Copy` `TimecodeSnapshot`, re-exported by `libethersync`.
+Protocol-only callers can convert a `View` with `TimecodeSnapshot::from(view)`. Its private state
+is evaluated through immutable `evaluate(local_ns)`,
+`evaluate_for_presentation(local_ns, delay_ns)`, and `next_boundary(local_ns)` methods. Capture
+and evaluation are bounded and allocate nothing, acquire no locks, and perform no networking.
+Snapshots remain valid after their reader, follower, or engine is destroyed.
+
+A snapshot freezes the published mapping, trajectory, correction policy/state, and lifecycle
+status. Positions, sample age, uncertainty, remaining slew, and known scheduled controls are
+evaluated at the requested time. Connection and synchronization flags remain as captured;
+evaluating a future timestamp does not refresh them or latch controls in the owner. Capture a
+new snapshot to see updates. This is not a history of previous timeline revisions: a timestamp
+conversion alone cannot recover an earlier control that the current snapshot no longer contains.
+
+WASM `follower.capture_snapshot()` returns an independently owned snapshot with `read`,
+`read_for_presentation`, and `next_boundary`, using the existing millisecond domain and result
+shapes. Capture does not tick the follower; call the live follower's `read(nowMs)` first when
+current staleness/lifecycle state is required. Free the snapshot when finished. Browser result
+serialization and owned snapshot creation may allocate. The inbound wire-state method remains
+`follower.snapshot(bytes, nowMs)`. Browser trace capture continues recording the live follower's
+operations; standalone snapshot evaluations do not change the follower or enter that trace.
+
+## Accepted clock observations
+
+`ClockMapping::accepted_observations` and `Reading::status.accepted_observations` count accepted
+observations in the current acquisition. This saturating `u64` counter can exceed the 128-entry
+history and trace bounds. Ordinary rejection, duplicate/unmatched responses, and diagnostic
+event loss do not increase it. Rejected observations in quarantine contribute only when a
+confirmed recovery promotes them: the new count is then the size of the promoted batch.
+Earlier trace entries retain their original rejected result.
+
+New leader sessions reset the count. When the entire accepted history expires, the next
+accepted observation starts at one. Partial eviction, holdover, and reconnecting to the same
+session preserve the count; reading alone does not expire estimator history. Leaders report
+zero because they do not estimate their own clock from follower exchanges. Clock-observation
+diagnostics include the resulting acquisition count; WASM readings and traces expose it as the
+exact decimal string `acceptedObservations`.
+
+The count describes accepted exchanges, not statistical independence, recency, or measured
+physical accuracy. Applications may require a minimum count alongside synchronization,
+uncertainty, and source-health criteria. Existing convergence and correction rules are unchanged.
+`offset_evidence.samples` still counts currently retained interval-support observations, and
+the bounded diagnostic trace still includes rejections; neither is an acquisition counter.
+
 ## Predicting a boundary
 
 Native code uses `reader.next_boundary_at(engine.clock().now_ns())`, or the convenience

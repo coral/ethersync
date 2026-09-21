@@ -26,6 +26,7 @@ web-transport-trait = "0.4"
 ethersync-protocol = { path = "../protocol", version = "0.1.0" }
 thiserror.workspace = true
 mdns-sd = "0.21.3"
+if-addrs = { version = "0.15", features = ["link-local"] }
 triple_buffer = "9.0.0"
 uuid = { version = "1.26.1", features = ["v4"] }
 

@@ -7,12 +7,20 @@ int main(void) {
     EsCore core = created.value;
     EsResultReading read = es_core_read(core, 123);
     CHECK(read.status == 0 && read.value.fps_numerator == 30);
+    EsResultTimecodeSnapshot captured = es_core_snapshot(core);
+    CHECK(!captured.status);
+    CHECK(!es_core_snapshot_into(core, captured.value).status);
+    EsResultTimecodeSnapshot copied = es_timecode_snapshot_copy(captured.value);
+    CHECK(!copied.status);
+    CHECK(es_timecode_snapshot_read(copied.value, 123).value.accepted_observations == 0);
     const uint8_t bytes[] = {255};
     const EsBytes malformed = {bytes, 1};
     EsResultUnit bad = es_core_state(core, malformed, 123);
     CHECK(bad.status != 0 && bad.error);
     es_buffer_dispose(&bad.error);
     es_core_dispose(&core);
+    CHECK(es_timecode_snapshot_read(copied.value, 123).value.frames == 0);
+    es_timecode_snapshot_dispose(&copied.value);
 #ifdef ETHERSYNC_NATIVE
     EsResultEngine started = es_engine_new();
     if (started.status) { es_buffer_dispose(&started.error); return 1; }
@@ -31,6 +39,14 @@ int main(void) {
     EsResultReader reader = es_leader_reader(leader);
     CHECK(!reader.status);
     CHECK(es_reader_read(reader.value).value.frames == -7);
+    CHECK(!es_reader_snapshot_into(reader.value, captured.value).status);
+    EsResultEndpointList endpoints = es_leader_local_endpoints(leader);
+    CHECK(!endpoints.status);
+    CHECK(es_endpoint_list_count(endpoints.value).value == 1);
+    EsResultEndpoint first_endpoint = es_endpoint_list_get(endpoints.value, 0);
+    CHECK(!first_endpoint.status);
+    es_endpoint_dispose(&first_endpoint.value);
+    es_endpoint_list_dispose(&endpoints.value);
     EsResultEndpoint address = es_leader_endpoint(leader);
     CHECK(!address.status);
     EsResultFollowerOptions follow_options = es_follower_options_endpoint(address.value);
@@ -55,6 +71,7 @@ int main(void) {
         smoke_sleep();
     } while (1);
     CHECK(synced.value.frames == -7 && synced.value.subframe == 0x80000000u);
+    CHECK(synced.value.accepted_observations >= 12);
     CHECK(!es_follower_shutdown(follower.value).status);
     es_reader_dispose(&remote.value);
     es_follower_dispose(&follower.value);
@@ -65,6 +82,8 @@ int main(void) {
     es_leader_options_dispose(&config.value);
     CHECK(!es_engine_shutdown(engine).status);
     es_engine_dispose(&engine);
+    CHECK(es_timecode_snapshot_read(captured.value, 123).value.frames == -7);
 #endif
+    es_timecode_snapshot_dispose(&captured.value);
     puts("C client passed");
 }

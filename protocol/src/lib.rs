@@ -24,7 +24,7 @@ pub mod timeline;
 pub mod tracking;
 pub use timeline::{
     ConnectionState, Correction, CorrectionPolicy, Reading, SourceHealth, SourceKind, Status,
-    SyncState,
+    SyncState, TimecodeSnapshot,
 };
 #[derive(Clone, Copy, Debug)]
 pub struct SourceSample {

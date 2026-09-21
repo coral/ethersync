@@ -75,7 +75,11 @@ struct Buffer {
         "&str" => "std::string_view".into(),
         "Vec<u8>" => "std::vector<uint8_t>".into(),
         "&[u8]" => "const std::vector<uint8_t>&".into(),
-        _ if t.starts_with('&') => format!("{}&", base(t)),
+        _ if t.starts_with('&') => format!(
+            "{}{}&",
+            if t.starts_with("&mut") { "" } else { "const " },
+            base(t)
+        ),
         _ => scalar(t, false),
     };
     let mut bodies = String::new();
@@ -114,6 +118,11 @@ public:
                 .first()
                 .is_some_and(|(_, t)| t.starts_with('&') && base(t) == owner);
             let (ret, fallible) = output(f);
+            let qualifier = if instance && !a[0].1.starts_with("&mut") {
+                " const"
+            } else {
+                ""
+            };
             let rt = if fallible {
                 format!("Result<{}>", typ(&ret))
             } else {
@@ -125,10 +134,12 @@ public:
                 .collect::<Vec<_>>()
                 .join(", ");
             header += &format!(
-                "{} {rt} {method}({decl});\n",
+                "{} {rt} {method}({decl}){qualifier};\n",
                 if instance { "" } else { "static" }
             );
-            bodies += &format!("inline {rt} {owner}::{method}({decl}) {{\ndetail::Buffer error;\n");
+            bodies += &format!(
+                "inline {rt} {owner}::{method}({decl}){qualifier} {{\ndetail::Buffer error;\n"
+            );
             let mut callargs = Vec::new();
             for (i, (n, t)) in a.iter().enumerate() {
                 callargs.push(if instance && i == 0 {

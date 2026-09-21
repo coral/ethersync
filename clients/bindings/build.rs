@@ -345,12 +345,17 @@ fn main() {
             .write_to_file(out.join("ethersync.h"));
     }
     // Stable, relocatable generated-source directory beside the Cargo artifacts.
-    let generated = out
+    // Cargo supports both build/<package-hash>/out and build/<package>/<hash>/out.
+    // Locate the profile directory without depending on that internal nesting depth.
+    let profile = out
         .ancestors()
-        .nth(3)
-        .unwrap()
-        .join("ethersync-generated")
-        .join(if native { "native" } else { "core" });
+        .find(|dir| dir.file_name().is_some_and(|name| name == "build"))
+        .and_then(|dir| dir.parent())
+        .expect("Cargo OUT_DIR must be beneath the profile's build directory");
+    let generated =
+        profile
+            .join("ethersync-generated")
+            .join(if native { "native" } else { "core" });
     fs::create_dir_all(&generated).unwrap();
     fs::copy(out.join("API.txt"), generated.join("API.txt")).unwrap();
     if env::var_os("CARGO_FEATURE_C").is_some() {

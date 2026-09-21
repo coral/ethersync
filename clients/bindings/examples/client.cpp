@@ -5,6 +5,12 @@ int main() {
     namespace es = ethersync::client;
     auto core = es::Core::create();
     CHECK(core.read(123).fps_numerator == 30);
+    auto snapshot = es::TimecodeSnapshot::create();
+    core.snapshot_into(snapshot);
+    const auto frozen = snapshot.copy();
+    CHECK(frozen.read(123).accepted_observations == 0);
+    CHECK(!frozen.next_boundary(123).valid);
+    CHECK(frozen.read_for_presentation(123, 1));
     auto bad = core.state({255}, 123);
     CHECK(!bad && !bad.error().empty());
 #ifdef ETHERSYNC_NATIVE
@@ -25,6 +31,12 @@ int main() {
     CHECK(leader.seek(-7, 0x80000000u));
     CHECK(reader.read().frames == -7);
     CHECK(reader.read().subframe == 0x80000000u);
+    reader.snapshot_into(snapshot);
+    const auto leader_snapshot = reader.snapshot();
+    auto endpoints = leader.local_endpoints();
+    CHECK(endpoints && endpoints.value().count() == 1);
+    CHECK(endpoints.value().get(0));
+    CHECK(!endpoints.value().get(1));
     auto address = leader.endpoint();
     auto follow_options = es::FollowerOptions::endpoint(address);
     CHECK(follow_options);
@@ -39,8 +51,10 @@ int main() {
     while (remote.read().synchronization != 2) { CHECK(++attempts < 1000); smoke_sleep(); }
     auto synced = remote.read();
     CHECK(synced.frames == -7 && synced.subframe == 0x80000000u);
+    CHECK(synced.accepted_observations >= 12);
     CHECK(follower.shutdown());
     CHECK(engine.shutdown());
+    CHECK(leader_snapshot.read(123).frames == -7);
 #endif
     std::cout << "C++ client passed\n";
 }

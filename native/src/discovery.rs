@@ -5,6 +5,39 @@ use std::{
     time::Duration,
 };
 pub const SERVICE_TYPE: &str = "_ethersync._udp.local.";
+
+pub(crate) fn local_endpoints(
+    bind: SocketAddr,
+    interfaces: impl IntoIterator<Item = if_addrs::Interface>,
+) -> Vec<SocketAddr> {
+    let mut endpoints: Vec<_> = interfaces
+        .into_iter()
+        .filter(|interface| interface.is_oper_up())
+        .filter_map(|interface| {
+            let ip = interface.ip();
+            if ip.is_ipv4() != bind.is_ipv4() || ip.is_unspecified() || ip.is_multicast() {
+                return None;
+            }
+            match ip {
+                IpAddr::V4(ip) if !ip.is_broadcast() => {
+                    Some(SocketAddr::new(ip.into(), bind.port()))
+                }
+                IpAddr::V4(_) => None,
+                IpAddr::V6(ip) => {
+                    let scope = if ip.is_unicast_link_local() {
+                        interface.index.filter(|index| *index != 0)?
+                    } else {
+                        0
+                    };
+                    Some(SocketAddr::V6(SocketAddrV6::new(ip, bind.port(), 0, scope)))
+                }
+            }
+        })
+        .collect();
+    endpoints.sort_unstable();
+    endpoints.dedup();
+    endpoints
+}
 #[derive(Clone, Debug, Default)]
 pub struct DiscoveryConfig {
     /// Empty selects all interfaces.
@@ -198,5 +231,72 @@ impl Drop for Advertisement {
     fn drop(&mut self) {
         let _ = self.daemon.unregister(&self.name);
         let _ = self.daemon.shutdown();
+    }
+}
+
+#[cfg(test)]
+mod endpoint_tests {
+    use super::*;
+    fn interface(ip: &str, index: Option<u32>) -> if_addrs::Interface {
+        let addr = match ip.parse().unwrap() {
+            IpAddr::V4(ip) => if_addrs::IfAddr::V4(if_addrs::Ifv4Addr {
+                ip,
+                netmask: std::net::Ipv4Addr::UNSPECIFIED,
+                prefixlen: 0,
+                broadcast: None,
+            }),
+            IpAddr::V6(ip) => if_addrs::IfAddr::V6(if_addrs::Ifv6Addr {
+                ip,
+                netmask: std::net::Ipv6Addr::UNSPECIFIED,
+                prefixlen: 0,
+                broadcast: None,
+            }),
+        };
+        if_addrs::Interface {
+            name: "test".into(),
+            addr,
+            index,
+            oper_status: if_addrs::IfOperStatus::Up,
+            is_p2p: false,
+            #[cfg(windows)]
+            adapter_name: "test".into(),
+        }
+    }
+    #[test]
+    fn filters_sorts_deduplicates_and_preserves_local_scopes() {
+        let mut down = interface("10.0.0.99", Some(9));
+        down.oper_status = if_addrs::IfOperStatus::Down;
+        let interfaces = vec![
+            interface("10.0.0.2", Some(2)),
+            interface("127.0.0.1", Some(1)),
+            interface("10.0.0.2", Some(3)),
+            interface("0.0.0.0", Some(1)),
+            interface("224.0.0.1", Some(1)),
+            interface("255.255.255.255", Some(1)),
+            down,
+            interface("fe80::1", Some(7)),
+            interface("fe80::1", Some(8)),
+            interface("fe80::2", None),
+            interface("fe80::3", Some(0)),
+            interface("::1", Some(1)),
+            interface("::", Some(1)),
+            interface("ff02::1", Some(1)),
+            interface("fd00::1", Some(7)),
+        ];
+        assert_eq!(
+            local_endpoints("0.0.0.0:1234".parse().unwrap(), interfaces.clone()),
+            ["10.0.0.2:1234", "127.0.0.1:1234"].map(|s| s.parse().unwrap())
+        );
+        let actual = local_endpoints("[::]:1234".parse().unwrap(), interfaces);
+        let mut expected = [
+            "[::1]:1234",
+            "[fd00::1]:1234",
+            "[fe80::1%7]:1234",
+            "[fe80::1%8]:1234",
+        ]
+        .map(|s| s.parse::<SocketAddr>().unwrap());
+        expected.sort();
+        assert_eq!(actual, expected);
+        assert!(local_endpoints("0.0.0.0:1".parse().unwrap(), []).is_empty());
     }
 }

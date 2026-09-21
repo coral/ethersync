@@ -53,6 +53,38 @@ cbindgen, csbindgen, and swift-bridge. Unsupported signatures fail the build. No
 The adapter intentionally exposes flat functions and opaque owned handles rather
 than duplicating the native Rust implementation in each language.
 
+Both native and core-only variants expose owned `TimecodeSnapshot` handles. Use
+`reader_snapshot` (native) or `core_snapshot` to allocate a captured snapshot, and
+`timecode_snapshot_copy` for an independent owned copy. For a timing loop, allocate
+once with `timecode_snapshot_new` and refresh with `reader_snapshot_into` or
+`core_snapshot_into`. Those refresh functions and snapshot read/presentation/boundary
+evaluation allocate nothing on successful calls. C and C++ errors, managed exceptions,
+and new/copy operations can allocate. Refresh requires exclusive access to the destination;
+immutable evaluation does not refresh it. Existing per-handle threading rules still apply.
+C++ generates const methods/references for immutable operations. C# protects handle lifetimes
+and rejects overlapping calls; use separate copies for concurrent consumers.
+
+The generated wrappers expose corresponding methods: `Reader.snapshot()` / `Core.snapshot()`
+in C++, `snapshot()` in Swift, and `Snapshot()` in C#. Their reusable forms are `snapshot_into`,
+`snapshotInto(snapshot:)`, and `SnapshotInto(snapshot)`. Snapshot methods include read,
+presentation prediction, and next-boundary prediction. C# also accepts `TimeSpan` presentation
+delays. All native timing values remain engine-relative nanoseconds; Rust's new
+`MonotonicClock::ns_at(Instant)` has no foreign clock-type adapter.
+
+Readings expose `accepted_observations` (`acceptedObservations` in Swift,
+`AcceptedObservations` in C#); observation events expose the count after processing the exchange.
+See [timing APIs](timing-apis.md) for reset and promoted-recovery semantics. This adds fields
+to the C ABI records: rebuild and distribute native libraries and generated headers/wrappers
+together. Do not use an older `Reading` or `EventData` layout with the new library.
+
+Native leaders expose `leader_local_endpoints`, returning an owned `EndpointList` captured
+from one interface enumeration. `endpoint_list_count` and checked `endpoint_list_get` access
+the stable list; each returned `Endpoint` is independently owned. Wrapper methods follow
+their language's naming conventions (`local_endpoints`, `localEndpoints`, `LocalEndpoints`).
+Enumeration and endpoint creation may allocate and belong outside timing loops. This surface
+is absent from the core-only SDK. See [multiple interfaces](multiple-interfaces.md) for scope
+IDs, wildcard binding, and address limitations.
+
 Swift uses generated throwing functions. Its string arguments are owned at the
 bridge boundary to avoid swift-bridge 0.1.59's invalid throwing `ToRustStr` closure
 generation. C++ uses explicit outcomes and is tested with `-fno-exceptions`.

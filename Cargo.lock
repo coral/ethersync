@@ -1554,6 +1554,7 @@ dependencies = [
  "crossterm",
  "ethersync-protocol",
  "http",
+ "if-addrs",
  "mdns-sd",
  "mio",
  "moq-native",

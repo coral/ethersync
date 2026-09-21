@@ -14,10 +14,17 @@ use std::{
 #[derive(Clone, Copy, Debug)]
 pub struct MonotonicClock(Instant);
 impl MonotonicClock {
+    /// Convert an Instant exactly into this engine's monotonic nanosecond domain.
+    /// Returns None before the origin or beyond the supported signed nanosecond range.
+    pub fn ns_at(self, instant: Instant) -> Option<u64> {
+        let ns = instant.checked_duration_since(self.0)?.as_nanos();
+        (ns <= i64::MAX as u128).then_some(ns as u64)
+    }
     pub fn now_ns(self) -> u64 {
         self.0.elapsed().as_nanos().min(i64::MAX as u128) as u64
     }
 }
+
 #[derive(Clone, Debug)]
 pub struct Timing {
     pub acquisition_probe: Duration,
@@ -169,6 +176,11 @@ pub struct TimecodeReader {
     _alive: Arc<()>,
 }
 impl TimecodeReader {
+    /// Acquire an independent copy of the latest published state. Allocation-free.
+    /// Its lifecycle state stays frozen until another snapshot is acquired.
+    pub fn snapshot(&mut self) -> TimecodeSnapshot {
+        (*self.output.read()).into()
+    }
     /// No allocations, mutexes, or network calls. `local_ns` must use this engine's clock.
     pub fn read_at(&mut self, local_ns: u64) -> Reading {
         self.output.read().evaluate(local_ns)
@@ -380,10 +392,25 @@ fn queue_error<T>(e: sync::TrySendError<T>) -> Error {
 }
 #[derive(Clone, Debug)]
 pub struct LeaderInfo {
+    /// Listener bind endpoint. An unspecified IP is not a follower destination.
     pub address: SocketAddr,
     pub identity: String,
     pub session: [u8; 16],
     pub fingerprint: String,
+}
+impl LeaderInfo {
+    /// Current concrete local listener candidates, not proof of remote reachability.
+    /// Includes loopback (same-host only). IPv6 scope IDs belong to this machine.
+    /// Enumerates OS interfaces on demand and may allocate; not a reader-path operation.
+    pub fn local_endpoints(&self) -> Result<Vec<SocketAddr>> {
+        if !self.address.ip().is_unspecified() {
+            return Ok(vec![self.address]);
+        }
+        Ok(crate::discovery::local_endpoints(
+            self.address,
+            if_addrs::get_if_addrs()?,
+        ))
+    }
 }
 pub struct Leader {
     control: Control,
@@ -595,5 +622,30 @@ pub(crate) fn fallback(c: &FollowerConfig) -> Timeline {
             ..Default::default()
         },
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod clock_tests {
+    use super::*;
+    #[test]
+    fn converts_instants_exactly_without_sampling_an_epoch() {
+        let origin = Instant::now();
+        let clock = MonotonicClock(origin);
+        assert_eq!(clock.ns_at(origin), Some(0));
+        assert_eq!(clock.ns_at(origin - Duration::from_nanos(1)), None);
+        assert_eq!(
+            clock.ns_at(origin + Duration::from_nanos(123_456)),
+            Some(123_456)
+        );
+        let before = clock.now_ns();
+        let sampled = clock.ns_at(Instant::now()).unwrap();
+        assert!(before <= sampled && sampled <= clock.now_ns());
+        if let Some(limit) = origin.checked_add(Duration::from_nanos(i64::MAX as u64)) {
+            assert_eq!(clock.ns_at(limit), Some(i64::MAX as u64));
+            if let Some(beyond) = limit.checked_add(Duration::from_nanos(1)) {
+                assert_eq!(clock.ns_at(beyond), None);
+            }
+        }
     }
 }

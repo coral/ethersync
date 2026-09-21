@@ -21,7 +21,7 @@ use ethersync_protocol::timeline;
 use ethersync_protocol::tracking;
 pub use timeline::{
     ConnectionState, Correction, CorrectionPolicy, Reading, SourceHealth, SourceKind, Status,
-    SyncState,
+    SyncState, TimecodeSnapshot,
 };
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

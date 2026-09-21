@@ -67,6 +67,10 @@ pub struct ClockMapping {
     pub uncertainty_ns: f64,
     pub last_sample_ns: u64,
     pub converged: bool,
+    /// Accepted observations in this acquisition, including promoted recovery samples.
+    /// Resets on replacement or complete expiry of the fit history, not partial eviction.
+    /// Saturates at u64::MAX; distinct from the bounded evidence/trace sample counts.
+    pub accepted_observations: u64,
     /// Intersection of accepted exchange constraints, independent of the point fit.
     pub evidence: Option<OffsetEvidence>,
 }
@@ -79,6 +83,7 @@ impl Default for ClockMapping {
             uncertainty_ns: f64::INFINITY,
             last_sample_ns: 0,
             converged: false,
+            accepted_observations: 0,
             evidence: None,
         }
     }
@@ -182,6 +187,7 @@ impl ClockEstimator {
             && self.mapping.converged
             && (offset - self.mapping.offset_at(local as u64)).abs()
                 > self.mapping.uncertainty_at(e.t4) + delay as f64 / 2. + 5_000_000.;
+        let accepted_observations;
         if rejected_delay || rejected_offset {
             // A single spike never changes the map. Eight similar observations spanning
             // at least 500ms establish a changed path/clock regime, not an isolated outlier.
@@ -205,8 +211,14 @@ impl ClockEstimator {
             }
             self.samples.clear();
             self.samples.append(&mut self.recovery);
+            accepted_observations = self.samples.len() as u64;
         } else {
             self.recovery.clear();
+            accepted_observations = if self.samples.is_empty() {
+                1
+            } else {
+                self.mapping.accepted_observations.saturating_add(1)
+            };
             self.samples.push_back(sample);
         }
         while self.samples.len() > 128 {
@@ -279,6 +291,7 @@ impl ClockEstimator {
                 + 100_000.,
             last_sample_ns: e.t4,
             converged: self.samples.len() >= 12 && span >= 500_000_000.,
+            accepted_observations,
             evidence: Some(OffsetEvidence {
                 reference_ns: e.t4,
                 lower_ns: lower,
@@ -385,6 +398,50 @@ mod tests {
             t3: 9_000_000_000,
             t4: 8_400_000_000
         }));
+    }
+}
+
+#[cfg(test)]
+mod observation_count_tests {
+    use super::*;
+    fn exchange(i: u64, offset: u64) -> Exchange {
+        let t = 1_000_000_000 + i * 100_000_000;
+        Exchange {
+            t1: t,
+            t2: t + offset + 1_000_000,
+            t3: t + offset + 1_000_000,
+            t4: t + 2_000_000,
+        }
+    }
+    #[test]
+    fn counts_acquisitions_not_trace_entries_or_retained_samples() {
+        let mut c = ClockEstimator::default();
+        for i in 0..200 {
+            assert!(c.observe(exchange(i, 5_000_000_000)));
+            assert_eq!(c.mapping().accepted_observations, i + 1);
+        }
+        assert_eq!(c.mapping().evidence.unwrap().samples, 128);
+        assert_eq!(c.trace().count(), 128);
+        assert!(!c.observe(exchange(199, 5_000_000_000)));
+        assert_eq!(c.mapping().accepted_observations, 200);
+        // Confirm a clock step. Earlier quarantined samples count only once promoted.
+        for i in 200..207 {
+            assert!(!c.observe(exchange(i, 5_100_000_000)));
+            assert_eq!(c.mapping().accepted_observations, 200);
+        }
+        assert!(c.observe(exchange(207, 5_100_000_000)));
+        assert_eq!(c.mapping().accepted_observations, 8);
+        assert_eq!(c.trace().last().unwrap().mapping.accepted_observations, 8);
+        assert!(c.observe(exchange(208, 5_100_000_000)));
+        assert_eq!(c.mapping().accepted_observations, 9);
+        // Partial time expiry retains the acquisition count; full expiry starts anew.
+        assert!(c.observe(exchange(525, 5_100_000_000)));
+        assert_eq!(c.mapping().accepted_observations, 10);
+        assert!(c.observe(exchange(1000, 5_100_000_000)));
+        assert_eq!(c.mapping().accepted_observations, 1);
+        c.mapping.accepted_observations = u64::MAX;
+        assert!(c.observe(exchange(1001, 5_100_000_000)));
+        assert_eq!(c.mapping().accepted_observations, u64::MAX);
     }
 }
 
@@ -537,6 +594,7 @@ mod confidence_tests {
             drift: 0.0005,
             uncertainty_ns: 0.,
             converged: true,
+            accepted_observations: 0,
             evidence: None,
         };
         let t = 61_000_000_000;

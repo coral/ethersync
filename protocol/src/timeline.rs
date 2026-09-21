@@ -215,6 +215,9 @@ pub struct Status {
     pub offset_ns: f64,
     pub drift_ppm: f64,
     pub lost_packets: u64,
+    /// Accepted clock observations in the current acquisition; zero on a leader.
+    /// This is neither the retained-history count nor an independent accuracy guarantee.
+    pub accepted_observations: u64,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Reading {
@@ -229,6 +232,37 @@ impl Reading {
         self.format.label(self.position)
     }
 }
+/// An independently owned, immutable copy of published timing state.
+///
+/// Evaluation allocates nothing and does not refresh connection/synchronization state.
+/// Refresh from the owner to observe updates. This is not a history of past revisions.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TimecodeSnapshot(View);
+impl From<View> for TimecodeSnapshot {
+    fn from(view: View) -> Self {
+        Self(view)
+    }
+}
+impl TimecodeSnapshot {
+    /// Evaluate using the owner's monotonic nanosecond domain.
+    pub fn evaluate(&self, local_ns: u64) -> Reading {
+        self.0.evaluate(local_ns)
+    }
+    /// Predict presentation using a nonnegative local delay in nanoseconds.
+    pub fn evaluate_for_presentation(
+        &self,
+        local_ns: u64,
+        compensation_delay_ns: u64,
+    ) -> Result<Reading, Error> {
+        self.0
+            .evaluate_for_presentation(local_ns, compensation_delay_ns)
+    }
+    /// Predict from this captured trajectory without advancing its owner.
+    pub fn next_boundary(&self, local_ns: u64) -> Option<crate::Boundary> {
+        self.0.next_boundary(local_ns)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct View {
     pub timeline: Timeline,
@@ -326,6 +360,7 @@ impl View {
                 offset_ns: self.mapping.offset_at(local),
                 drift_ppm: self.mapping.drift * 1e6,
                 lost_packets: self.lost_packets,
+                accepted_observations: self.mapping.accepted_observations,
             },
         }
     }
@@ -944,5 +979,145 @@ mod presentation_tests {
         assert_eq!(r.position, Position::ZERO);
         assert_eq!(r.rate, Rate::PAUSED);
         assert_eq!(r.status.synchronization, SyncState::Uninitialized);
+    }
+}
+
+#[cfg(test)]
+mod snapshot_tests {
+    use super::*;
+    #[test]
+    fn snapshots_preserve_full_trajectories_and_captured_lifecycle() {
+        for rate in [-2, 0, 1] {
+            let mut view = View {
+                sync: SyncState::Holdover,
+                connection: ConnectionState::Disconnected,
+                mapping: ClockMapping {
+                    last_sample_ns: 1,
+                    offset_ns: 1_000_000_000.,
+                    drift: 0.0002,
+                    accepted_observations: 25,
+                    ..Default::default()
+                },
+                correction_frames: 0.1,
+                correction_at: 1_000_000_000,
+                ..Default::default()
+            };
+            view.timeline.format = FrameFormat::new(30000, 1001, true).unwrap();
+            view.timeline.anchor.rate = Rate::new(rate, 1).unwrap();
+            view.timeline.anchor.position = Position {
+                frames: -7,
+                subframe: 0x80000000,
+            };
+            view.timeline.scheduled[0] = Scheduled {
+                discontinuity: 1,
+                anchor: Anchor {
+                    time_ns: 8_000_000_000,
+                    position: Position::from_frames(42),
+                    rate: Rate::PAUSED,
+                },
+            };
+            view.timeline.scheduled_len = 1;
+            let snapshot = TimecodeSnapshot::from(view);
+            for at in [
+                0,
+                1_000_000_000,
+                2_000_000_000,
+                8_000_000_000,
+                10_000_000_000,
+            ] {
+                assert_eq!(
+                    format!("{:?}", snapshot.evaluate(at)),
+                    format!("{:?}", view.evaluate(at))
+                );
+                assert_eq!(
+                    format!("{:?}", snapshot.next_boundary(at)),
+                    format!("{:?}", view.next_boundary(at))
+                );
+                assert_eq!(
+                    format!(
+                        "{:?}",
+                        snapshot.evaluate_for_presentation(at, 10_000_000).unwrap()
+                    ),
+                    format!("{:?}", view.evaluate(at + 10_000_000))
+                );
+            }
+            view.connection = ConnectionState::Shutdown;
+            assert_eq!(
+                view.evaluate(0).status.connection,
+                ConnectionState::Shutdown
+            );
+            assert_eq!(
+                snapshot.evaluate(0).status.connection,
+                ConnectionState::Disconnected
+            );
+            assert_eq!(snapshot.evaluate(10_000_000_000).position.frames, 42);
+            assert_eq!(snapshot.evaluate(0).status.accepted_observations, 25);
+            assert!(
+                snapshot
+                    .evaluate_for_presentation(i64::MAX as u64, 1)
+                    .is_err()
+            );
+        }
+        assert_eq!(
+            TimecodeSnapshot::default()
+                .evaluate(0)
+                .status
+                .synchronization,
+            SyncState::Uninitialized
+        );
+    }
+    #[test]
+    fn counts_survive_holdover_and_same_session_reconnect_but_not_new_sessions() {
+        let mut core = FollowerCore::new(Timeline::default(), CorrectionPolicy::default());
+        let state = Timeline {
+            session: [1; 16],
+            revision: 1,
+            ..Default::default()
+        };
+        core.connected();
+        core.state(state, 1);
+        for i in 1..=20 {
+            let t = i * 100_000_000;
+            core.measurement(crate::clock::Exchange {
+                t1: t,
+                t2: t + 1_000_000,
+                t3: t + 1_000_000,
+                t4: t + 2_000_000,
+            });
+        }
+        assert_eq!(
+            core.view
+                .evaluate(2_002_000_000)
+                .status
+                .accepted_observations,
+            20
+        );
+        core.disconnected();
+        core.tick(30_000_000_000, 2_000_000_000);
+        assert_eq!(core.view.mapping.accepted_observations, 20);
+        core.connected();
+        core.state(
+            Timeline {
+                revision: 2,
+                ..state
+            },
+            30_000_000_000,
+        );
+        assert_eq!(core.view.mapping.accepted_observations, 20);
+        core.connected();
+        core.state(
+            Timeline {
+                session: [2; 16],
+                ..state
+            },
+            30_000_000_001,
+        );
+        assert_eq!(
+            core.view
+                .evaluate(30_000_000_001)
+                .status
+                .accepted_observations,
+            0
+        );
     }
 }
