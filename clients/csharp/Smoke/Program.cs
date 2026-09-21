@@ -1,0 +1,85 @@
+using System;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
+using Ethersync;
+
+static void Check(bool value, string message) { if (!value) throw new Exception(message); }
+using (var format = new TimecodeFormat(30000, 1001, true)) {
+    Check(format.Position(0,1,0,2).Frames == 1800, "drop-frame ABI");
+    try { format.Position(0,1,0,0); throw new Exception("invalid drop label accepted"); }
+    catch (EthersyncException) { }
+}
+using (var core = new Core())
+{
+    var initial = core.Read(123);
+    Check(initial.Frames == 0 && initial.FpsNumerator == 30 && initial.Synchronization == Synchronization.Uninitialized, "fallback");
+    try { core.State(new byte[] {255}, 123); throw new Exception("bad protobuf accepted"); }
+    catch (EthersyncException e) { Check(e.Status != 0 && e.Message.Length > 0, "managed error"); }
+    core.Connected();
+    Check(core.Probe(1_000_000).Length > 0, "owned byte output");
+    core.Dispose();
+    try { core.Read(0); throw new Exception("disposed handle accepted"); }
+    catch (ObjectDisposedException) { }
+}
+using (var core = Core.Configured(long.MaxValue - 100, uint.MaxValue, 30, 1, false, 0.1, 1, 3))
+{
+    Check(core.Read(0).Frames == long.MaxValue - 100 && core.Read(0).Subframe == uint.MaxValue, "exact Q32");
+    Check(core.ReadForPresentation(0, TimeSpan.FromMilliseconds(20)).Frames == long.MaxValue - 100, "presentation duration");
+    try { core.ReadForPresentation(0, TimeSpan.FromTicks(-1)); throw new Exception("negative delay accepted"); }
+    catch (ArgumentOutOfRangeException) { }
+    for (int i=0;i<10_000;i++) core.Read(0);
+    long before=GC.GetAllocatedBytesForCurrentThread();
+    for (int i=0;i<100_000;i++) core.Read((ulong)i);
+    Check(GC.GetAllocatedBytesForCurrentThread()==before, "reads allocate managed memory");
+}
+#if ETHERSYNC_NATIVE
+using var engine = new Engine();
+using var options = new LeaderOptions();
+options.Advertise(false);
+options.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+using var leader = engine.Leader(options);
+leader.Seek(-7, 0x80000000);
+using var reader = leader.Reader();
+Check(reader.Read().Frames == -7 && reader.Read().Subframe == 0x80000000, "native Q32");
+using var endpoint = leader.Endpoint();
+using var followOptions = new FollowerOptions(endpoint.ToIPEndPoint());
+followOptions.Pin(leader.Fingerprint());
+using var follower = engine.Follower(followOptions);
+using var remote = follower.Reader();
+for (int i=0;i<10_000;i++) reader.Read();
+long readBefore=GC.GetAllocatedBytesForCurrentThread();
+for (int i=0;i<100_000;i++) reader.Read();
+Check(GC.GetAllocatedBytesForCurrentThread()==readBefore, "native reads allocate managed memory");
+var until=DateTime.UtcNow.AddSeconds(5);
+while(remote.Read().Synchronization != Synchronization.Synchronized)
+{
+    Check(DateTime.UtcNow<until,"follower acquisition");
+    Thread.Sleep(10);
+}
+Check(remote.Read().Frames == -7 && remote.Read().Subframe == 0x80000000, "follower reading");
+Console.WriteLine(remote.Read().Timecode);
+using var ipv6=Endpoint.From(new IPEndPoint(IPAddress.Parse("fe80::1%7"),4443));
+Check(ipv6.ToIPEndPoint().Address.ScopeId == 7,"IPv6 scope");
+try { using var invalid = new FollowerOptions(new IPEndPoint(IPAddress.Loopback,0)); throw new Exception("port zero accepted"); }
+catch (EthersyncException) { }
+// Reads and disposal may race without freeing native memory under a call.
+var raced=leader.Reader();
+var worker=Task.Run(() => { for(int i=0;i<10_000;i++) { try { raced.Read(); } catch(ObjectDisposedException) { break; } } });
+raced.Dispose(); worker.GetAwaiter().GetResult(); raced.Dispose();
+// Dropping wrappers without Dispose still returns native reader slots.
+for (int i=0;i<100;i++) {
+    AbandonReader(leader);
+    if (i % 10 == 0) { GC.Collect(); GC.WaitForPendingFinalizers(); }
+}
+follower.Reconnect();
+follower.Shutdown();
+engine.Shutdown();
+#endif
+Console.WriteLine("C# wrappers passed");
+
+#if ETHERSYNC_NATIVE
+[MethodImpl(MethodImplOptions.NoInlining)]
+static void AbandonReader(Leader leader) { var reader = leader.Reader(); reader.Read(); }
+#endif

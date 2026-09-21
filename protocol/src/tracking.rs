@@ -1,0 +1,255 @@
+//! Timestamped external-source tracking, independent of any input device or runtime.
+use crate::{
+    timeline::{Anchor, Timeline},
+    *,
+};
+#[derive(Default)]
+pub struct Tracker {
+    last: Option<SourceSample>,
+    candidate: Option<(f64, u8)>,
+    jumps: u8,
+    jumps_sign: i8,
+}
+impl Tracker {
+    /// Returns whether this input introduces an immediate discontinuity.
+    pub fn sample(&mut self, t: &mut Timeline, s: SourceSample, now: u64) -> Result<bool, Error> {
+        if t.source_kind != SourceKind::Tracked {
+            return Err(Error::Invalid("source is not tracked"));
+        }
+        if s.timestamp_ns > now || self.last.is_some_and(|p| s.timestamp_ns <= p.timestamp_ns) {
+            return Err(Error::Invalid(
+                "source timestamps must increase and not be in the future",
+            ));
+        }
+        let previous = self.last;
+        let inferred = previous.and_then(|p| {
+            let elapsed = (s.timestamp_ns - p.timestamp_ns) as f64 / 1e9;
+            (elapsed >= 0.001).then(|| {
+                ((s.position.fixed() - p.position.fixed()) as f64 / 4294967296.)
+                    / (elapsed * t.format.fps())
+            })
+        });
+        let speed = s
+            .rate_hint
+            .map(Rate::as_f64)
+            .or(inferred)
+            .unwrap_or(t.anchor.rate.as_f64())
+            .clamp(-64., 64.);
+        let error = (s.position.fixed() - t.anchor.at(s.timestamp_ns, t.format).fixed()) as f64
+            / 4294967296.;
+        let mut changed = s.discontinuity || previous.is_none();
+        if error.abs() > 1. {
+            let sign = if error > 0. { 1 } else { -1 };
+            if sign != self.jumps_sign {
+                self.jumps = 0;
+            }
+            self.jumps_sign = sign;
+            self.jumps += 1;
+        } else {
+            self.jumps = 0;
+        }
+        if self.jumps >= 3 {
+            changed = true;
+            self.jumps = 0;
+        }
+        let mut rate = t.anchor.rate;
+        if let Some(hint) = s.rate_hint
+            && hint != rate
+        {
+            rate = hint;
+            changed = true;
+        } else if (speed - rate.as_f64()).abs() > 0.02 {
+            let count = self
+                .candidate
+                .filter(|(v, _)| (v - speed).abs() < 0.05)
+                .map_or(1, |(_, n)| n + 1);
+            self.candidate = Some((speed, count));
+            if count >= 3 {
+                rate = Rate::new((speed * 10000.).round() as i32, 10000)?;
+                changed = true;
+                self.candidate = None;
+            }
+        } else {
+            self.candidate = None;
+        }
+        let position = if changed {
+            s.position
+        } else {
+            Position::from_fixed(
+                t.anchor.at(s.timestamp_ns, t.format).fixed()
+                    + (error.clamp(-0.1, 0.1) * 0.2 * 4294967296.) as i128,
+            )
+        };
+        t.anchor = Anchor {
+            time_ns: s.timestamp_ns,
+            position,
+            rate,
+        };
+        t.source_health = SourceHealth::Healthy;
+        if changed {
+            self.jumps = 0;
+            self.jumps_sign = 0;
+            self.candidate = None;
+            t.discontinuity += 1;
+            t.scheduled_len = 0;
+        }
+        self.last = Some(s);
+        Ok(changed)
+    }
+    pub fn health(&self, now: u64, timeout: u64) -> SourceHealth {
+        if self
+            .last
+            .is_none_or(|s| now.saturating_sub(s.timestamp_ns) > timeout)
+        {
+            SourceHealth::Degraded
+        } else {
+            SourceHealth::Healthy
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn jitter_rate_estimation_loss_and_changes() {
+        let mut t = Timeline {
+            source_kind: SourceKind::Tracked,
+            ..Default::default()
+        };
+        let mut tracker = Tracker::default();
+        for i in 1..=100 {
+            let now = i * 100_000_000;
+            let jitter = if i % 2 == 0 { 0.003 } else { -0.003 };
+            let position = Position::from_fixed(((i as f64 * 3. + jitter) * 4294967296.) as i128);
+            tracker
+                .sample(
+                    &mut t,
+                    SourceSample {
+                        timestamp_ns: now,
+                        position,
+                        rate_hint: None,
+                        discontinuity: false,
+                    },
+                    now,
+                )
+                .unwrap();
+        }
+        assert!((t.anchor.rate.as_f64() - 1.).abs() < 0.01);
+        assert_eq!(
+            tracker.health(11_000_000_000, 500_000_000),
+            SourceHealth::Degraded
+        );
+        assert_eq!(t.source_kind, SourceKind::Tracked);
+        assert!(t.anchor.at(11_000_000_000, t.format) > t.anchor.position);
+        assert!(
+            tracker
+                .sample(
+                    &mut t,
+                    SourceSample {
+                        timestamp_ns: 10_000_000_000,
+                        position: Position::ZERO,
+                        rate_hint: None,
+                        discontinuity: false
+                    },
+                    11_000_000_000
+                )
+                .is_err()
+        );
+        let changed = tracker
+            .sample(
+                &mut t,
+                SourceSample {
+                    timestamp_ns: 11_000_000_000,
+                    position: Position::from_frames(900),
+                    rate_hint: Some(Rate::new(-1, 1).unwrap()),
+                    discontinuity: true,
+                },
+                11_000_000_000,
+            )
+            .unwrap();
+        assert!(changed);
+        assert_eq!(t.anchor.rate, Rate::new(-1, 1).unwrap());
+    }
+}
+
+#[cfg(test)]
+mod stability_tests {
+    use super::*;
+    #[test]
+    fn tiny_explicit_rate_hints_are_not_discarded() {
+        let mut tracker = Tracker::default();
+        let mut timeline = Timeline {
+            source_kind: SourceKind::Tracked,
+            ..Default::default()
+        };
+        let hint = Rate::new(1, 100000).unwrap();
+        tracker
+            .sample(
+                &mut timeline,
+                SourceSample {
+                    timestamp_ns: 1,
+                    position: Position::ZERO,
+                    rate_hint: Some(hint),
+                    discontinuity: false,
+                },
+                1,
+            )
+            .unwrap();
+        assert_eq!(timeline.anchor.rate, hint);
+    }
+    #[test]
+    fn alternating_source_errors_do_not_confirm_a_jump() {
+        let mut tracker = Tracker::default();
+        let mut timeline = Timeline {
+            source_kind: SourceKind::Tracked,
+            ..Default::default()
+        };
+        tracker
+            .sample(
+                &mut timeline,
+                SourceSample {
+                    timestamp_ns: 0,
+                    position: Position::ZERO,
+                    rate_hint: Some(Rate::PAUSED),
+                    discontinuity: false,
+                },
+                0,
+            )
+            .unwrap();
+        for i in 1..10 {
+            let now = i * 1_000_000_000;
+            assert!(
+                !tracker
+                    .sample(
+                        &mut timeline,
+                        SourceSample {
+                            timestamp_ns: now,
+                            position: Position::from_frames(if i % 2 == 0 { 2 } else { -2 }),
+                            rate_hint: Some(Rate::PAUSED),
+                            discontinuity: false
+                        },
+                        now
+                    )
+                    .unwrap()
+            );
+        }
+        assert_eq!(timeline.discontinuity, 1);
+        for i in 10..13 {
+            let now = i * 1_000_000_000;
+            let changed = tracker
+                .sample(
+                    &mut timeline,
+                    SourceSample {
+                        timestamp_ns: now,
+                        position: Position::from_frames(2),
+                        rate_hint: Some(Rate::PAUSED),
+                        discontinuity: false,
+                    },
+                    now,
+                )
+                .unwrap();
+            assert_eq!(changed, i == 12);
+        }
+    }
+}

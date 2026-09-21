@@ -1,0 +1,6 @@
+/target
+
+/dist
+
+/clients/csharp/**/bin/
+/clients/csharp/**/obj/

@@ -1,0 +1,62 @@
+syntax = "proto3";
+package ethersync.v1;
+
+// Source provenance does not change when external input disappears.
+enum SourceKind {
+  SOURCE_KIND_UNSPECIFIED = 0;
+  SOURCE_KIND_GENERATED = 1;
+  SOURCE_KIND_TRACKED = 2;
+}
+// Health of the timecode source, independent of connection health.
+enum SourceHealth {
+  SOURCE_HEALTH_UNSPECIFIED = 0;
+  SOURCE_HEALTH_HEALTHY = 1;
+  SOURCE_HEALTH_DEGRADED = 2;
+}
+// Supported exact frame rate and display convention.
+message FrameFormat {
+  uint32 numerator = 1;
+  uint32 denominator = 2;
+  bool drop_frame = 3;
+}
+// Signed unwrapped frames plus a nonnegative fraction in units of 2^-32 frames.
+message Position {
+  sint64 frames = 1;
+  fixed32 subframe = 2;
+}
+// Signed rational playback multiplier; zero means paused.
+message Rate {
+  sint32 numerator = 1;
+  uint32 denominator = 2;
+}
+// A complete trajectory, timestamped in leader monotonic nanoseconds.
+message Anchor {
+  uint64 time_ns = 1;
+  Position position = 2;
+  Rate rate = 3;
+}
+// A retained future trajectory, applied exactly at anchor.time_ns.
+message ScheduledChange {
+  uint64 discontinuity = 1;
+  Anchor anchor = 2;
+}
+// One complete independent state group. Protocol v1 has no delta messages.
+message Snapshot {
+  uint32 version = 1;
+  bytes session = 2;
+  uint64 revision = 3;
+  uint64 discontinuity = 4;
+  SourceKind source_kind = 5;
+  SourceHealth source_health = 6;
+  FrameFormat format = 7;
+  Anchor anchor = 8;
+  repeated ScheduledChange scheduled = 9;
+}
+// Private unreliable request/reply; response echoes sequence and t1.
+message Probe {
+  uint32 version = 1;
+  uint64 sequence = 2;
+  uint64 t1 = 3;
+  uint64 t2 = 4;
+  uint64 t3 = 5;
+}

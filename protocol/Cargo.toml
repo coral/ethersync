@@ -1,0 +1,15 @@
+[package]
+name = "ethersync-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[dependencies]
+prost.workspace = true
+thiserror.workspace = true
+
+[build-dependencies]
+protox = "0.9.1"
+prost-build = "0.14.4"
+prost.workspace = true

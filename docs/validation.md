@@ -1,0 +1,243 @@
+# Validation
+
+## Reproducible local checks
+
+Run `scripts/check.sh` after installing the pinned schema tools described in the README. It executes formatting, Clippy with warnings denied, workspace tests/doctests, Rustdoc with warnings denied, Buf lint/format/build, protoc-gen-doc generation, and every example. `scripts/smoke_examples.py` starts actual separate leader/follower processes, asserts reverse playback and synchronized status, and runs the tracked example through loss, pause, and reverse.
+
+Run the network-dependent discovery test separately:
+
+```sh
+cargo test -p ethersync --test mdns -- --ignored --nocapture
+```
+
+It advertises two equal display names, checks distinct identities and usable endpoint/pin metadata, and observes goodbye removal after leader shutdown. It requires a multicast-capable interface; a failure here must be reported independently from direct QUIC functionality.
+
+The tests cover:
+
+- Protocol golden fixtures, malformed randomized inputs, version/enum/rational validation, 512-byte limits, and ordered bounded schedules.
+- Exact rational arithmetic, signed Q32 subframes, overflow-safe reverse motion, all frame formats, midnight wrapping, and every frame label in a full day at both drop-frame rates.
+- Deterministic symmetric LAN delay uniformly distributed from 1–5 ms per direction, ±200 ppm drift, 1% loss, acquisition in less than two seconds, and at most 2 ms p95 clock-map error after acquisition.
+- Asymmetry uncertainty, holdover uncertainty growth, invalid exchanges, reordering, delayed/lost probes, a latency step from 2 ms to 30 ms each way, a ten-second outage, and recovery.
+- Immediate and late discontinuities, stale snapshots, changed sessions, scheduled controls during holdover, bounded slew, and three-measurement hard correction.
+- Tracked input jitter, estimated speed, source loss, pause/reverse hints, and input recovery.
+- Real QUIC with multiple followers, late joining, correct/incorrect pins, IPv4 and IPv6 loopback, same-address session restart, signed running and paused holdover, undrained events, and repeated startup/shutdown.
+- A thread-local allocation counter around 100,000 reader evaluations, live-reader limits, slot reclamation, and shutdown state publication.
+
+The simulation uses a reproducible linear-congruential random generator. The reported clock-mapping error is compared to the simulated ground truth, not to the estimator's own uncertainty. The accuracy target applies to the stated symmetric simulated network; asymmetric paths and oscillator changes can produce additional error.
+
+## Two-computer Wi-Fi procedure
+
+1. Build the same checkout and Cargo.lock on two computers. Record hardware, OS, power mode, Rust version, Wi-Fi adapter/driver, AP model, band/channel, and the revision under test. Put both machines on the same LAN with client isolation disabled. Permit UDP 4443 and mDNS UDP 5353 in the host firewalls. Avoid suspend during the run.
+2. On computer A, run `cargo run --release -p ethersync --example leader -- --bind 0.0.0.0:4443 --fps 29.97 --drop-frame --start 107892`. Record its displayed certificate fingerprint and Wi-Fi IP. On B, run the follower with `--address A_WIFI_IP:4443 --pin FINGERPRINT --seconds 600`, saving stdout/stderr. Then repeat using discovery selection without `--address` and check that the same identity is shown.
+3. On A, issue `play`, `pause`, `seek 0`, `shuttle -1 1`, `shuttle 1 2`, and `at 1000 1800 0 1`. Confirm B acquires synchronization, changes discontinuities immediately on explicit commands, runs in the correct direction/rate, and reaches the scheduled paused position. Record acquisition time, uncertainty, sample age, offset/drift, RTT, and loss counters. Console labels are display diagnostics, not subframe measurements.
+4. While running at -1x, disconnect A from Wi-Fi for 30 seconds. B must enter holdover and continue in reverse with increasing uncertainty. Reconnect A and observe recovery. Repeat while paused; position must remain fixed. Restart the leader on the same port, exchange its new fingerprint through the trusted channel, and restart B with the new pin. For a separate trusted-LAN recovery test, omit `--pin` and verify that the existing follower reconnects and reinitializes on the new session. Confirm it never switches to another advertised leader.
+5. Run the tracked example on A for ten seconds and observe B's `Tracked/Healthy` → `Tracked/Degraded` → `Tracked/Healthy` transitions during the 3–5 second input gap. Timecode continues through the gap; later pause/reverse changes should appear immediately.
+6. Repeat with idle Wi-Fi and with normal local traffic. Run at least ten acquisitions and several ten-minute steady runs. Preserve logs and configuration, count failures, and report distributions instead of a single best run.
+
+### Physical accuracy measurement
+
+The above procedure verifies connectivity and recovery but cannot establish absolute time error: the two host monotonic clocks have no independent shared epoch, and network-estimator diagnostics are not ground truth. Do not claim physical-network p95 accuracy from the printed offset or labels.
+
+To measure accuracy, independently calibrate both hosts' monotonic clocks against the same reference (for example a captured common timing pulse or a calibrated external timing instrument), and record the timestamp of each reader evaluation together with its unwrapped Q32 position. The measurement apparatus must have known uncertainty substantially below 2 ms. Compare B's evaluated timeline to A's reference trajectory at the same independently determined instant, convert frame error to milliseconds using the exact rational format, and compute median/p95/max separately for acquisition, steady playback, explicit changes, and recovery. Report the reference method and its uncertainty, path direction, sample count, drift, delay/loss, and any rejected measurements. Source/device output latency must be measured separately from library clock-map error.
+
+No two-computer or instrumented physical-network measurement has been performed as part of local implementation. Actual LTC I/O and hardware timestamp support remain follow-up work.
+
+## Local result, 2026-09-19
+
+Validated on macOS arm64 with Rust 1.98.1, Buf 1.73.0, and protoc-gen-doc 1.5.1. Formatting, Clippy, workspace tests/doctests, Rustdoc, schema lint/build/format, generated-reference consistency, all examples, and the explicit mDNS smoke test passed. The suite has 27 automatic tests including the doctest, plus one explicit multicast test.
+
+The 80-second symmetric-LAN simulations use seeds 7, 19, and 997, each at -200, 0, and +200 ppm. They deliver replies only after simulated t4, switch from 20 Hz acquisition to 4 Hz steady probes, and evaluate clock-map error every 10 ms, including intervals between probes. All nine runs acquired in 0.56 seconds. P95 error after two seconds ranged from 0.333 to 0.585 ms. These are deterministic software simulation results only.
+
+## WASM portability, 2026-09-20
+
+The shared clock, timeline, and source-tracking tests now live in `ethersync-protocol`; the native
+client reuses those modules. `clients/wasm` depends only on that protocol crate and binding/serialization
+libraries. It builds for `wasm32-unknown-unknown`. The web pnpm tests execute the generated WASM in
+Node, covering protocol fixtures, malformed/version/size rejection, signed extrapolation, controls,
+scheduled pause, stale revisions/sessions, source health, reconnect, and indefinite holdover.
+
+`lib/tests/webtransport.rs` exercises a real HTTP/3 connection to the native leader on its existing
+UDP listener, validating state, private request/reply datagrams, and correct/incorrect pin behavior.
+This is a Rust HTTP/3 client test, not a browser test. See [the browser test procedure](../web/README.md).
+No browser was available through the browser automation runtime during this implementation; live
+browser interoperation and its manual acceptance checklist remain unverified.
+
+The compiled-WASM simulation also exercises the complete follower (including timeline correction)
+for 20 seconds with 1–5 ms per-direction delay, +200 ppm drift, and 1% loss. Seed 19 acquires at
+660 ms with 1.360 ms p95 timecode error after acquisition. This is simulated ground truth, not
+a browser or physical-network measurement. Native formatting, Clippy, tests/doctests, Rustdoc,
+schema checks, generated-reference consistency, all three example smoke tests, and the explicit
+mDNS test also pass after the extraction.
+
+## Investigation of a follower appearing ahead, 2026-09-20
+
+A regression test exposed a real startup issue: with identical clock epochs, a first probe
+whose request path is delayed by 40 ms creates a +20 ms provisional offset. Later symmetric
+probes converge to the correct clock mapping, but the old implementation preserved the
+provisional timeline error with its 0.03 frames/second slew limit (1 ms/second at 30 fps).
+At two seconds, the clock error was 0.000 ms while timecode remained 18.052 ms ahead, with
+`Synchronized` status and 1.112 ms **clock** uncertainty. Thus clock uncertainty alone did
+not bound the displayed timecode error. This is a reproducible defect, not a conclusion
+inferred from a screenshot.
+
+The follower now applies acquisition mappings directly, through the first converged sample,
+and only then uses the steady-state slew limiter. The regression case now has 0.000 ms
+clock and timecode error. Compiled-WASM tests cover initial request and reply delays with
+a negative -83,877 ms epoch offset, matching the sign/magnitude seen in the reported UI.
+`Status::correction_frames` and the browser's Timeline adjustment field expose the remaining
+intentional adjustment separately from clock uncertainty.
+
+`cd web && pnpm measure` supplies an independent same-instant test. A native fixture creates
+a real leader and a pinned HTTP/3 connection; compiled WASM in Node receives the wire bytes
+and creates probes. A separate IPC calibration channel intersects send/receive bounds to
+map Node monotonic time into the leader epoch; it does not use the NTP estimator or assume
+symmetric IPC delay. The native reader and WASM reader evaluate at the same calibrated
+instant. Signed median and absolute p95/max distinguish systematic lead from random jitter.
+
+Measured run after the fix, 600 samples per playback rate:
+
+| Rate | Signed median timecode error | Absolute p95 | Absolute maximum |
+| --- | ---: | ---: | ---: |
+| +1x | +0.163 ms | 0.238 ms | 0.252 ms |
+| -1x | -0.144 ms | 0.196 ms | 0.198 ms |
+| +0.5x | +0.112 ms | 0.117 ms | 0.118 ms |
+| +2x | +0.429 ms | 0.441 ms | 0.444 ms |
+| Paused | 0.000 ms | 0.000 ms | 0.000 ms |
+
+Acquisition took 560 ms. Calibration uncertainty was at most ±0.023 ms; beginning/end
+reference offset changed by only 0.002 ms. Timecode errors are expressed in nominal frame
+milliseconds, so the +2x error naturally doubles the same clock error. These are local
+HTTP/3 + IPC + WASM measurements, not measurements of browser JavaScript transport scheduling
+or its compositor. The live browser automation runtime remained unavailable.
+
+`python3 scripts/measure_display.py` separately samples a real leader terminal through a PTY.
+One run recorded 261 updates: median sampling interval 18.067 ms, p95 18.467 ms, maximum
+19.200 ms. This measures actual timecode sampling cadence, excluding terminal rendering and
+OS-compositor latency. Independent display sampling can therefore contribute a visible
+frame difference, but this does not establish the cause of the specific screenshot.
+
+The timestamp audit found one application of the clock offset/drift, followed by one anchor
+extrapolation; no additional RTT advance is applied. Both native and WASM use the same Q32
+arithmetic and label formatting. The reproducible startup defect is fixed; the exact split
+between browser timing error and presentation delay in the user's screenshot remains unmeasured.
+
+## Stability follow-up — 2026-09-20
+
+The [stability review](stability-review.md) records additional reproduced failures and fixes.
+The suite now includes 30 protocol unit tests, five wire tests, six compiled-WASM tests,
+and native integration tests. Formatting, Clippy with warnings denied, workspace tests and
+doctests, and the production web build pass. The multicast test remains explicitly opt-in
+and was not rerun for this algorithm-only follow-up.
+
+The deterministic symmetric LAN scenarios still acquire in 0.56 seconds, with p95 clock
+error below 0.6 ms across the tested seeds and ±200 ppm drifts. The compiled-WASM jitter,
+drift, and loss scenario acquires in 660 ms with p95 timecode error 1.360 ms. The new
+latency-change regression accepts the changed path after 1.75 seconds at the steady probe
+cadence; this is a deterministic result, not a universal recovery deadline.
+
+Latest `pnpm --dir web measure` run after the stability changes, 600 samples per rate:
+
+| Rate | Signed median timecode error | Absolute p95 | Absolute maximum |
+| --- | ---: | ---: | ---: |
+| +1x | +0.187 ms | 0.248 ms | 0.254 ms |
+| -1x | -0.212 ms | 0.237 ms | 0.240 ms |
+| +0.5x | +0.111 ms | 0.115 ms | 0.116 ms |
+| +2x | +0.450 ms | 0.467 ms | 0.468 ms |
+| Paused | 0.000 ms | 0.000 ms | 0.000 ms |
+
+Acquisition took 573 ms. Per-rate independent calibration uncertainty was at most ±0.030 ms;
+the final calibration was ±0.042 ms and the reference offset changed by 0.004 ms across the
+run. These measurements include real HTTP/3, IPC delivery, and compiled WASM in Node, and
+exclude browser scheduling and presentation. The small positive clock bias remains measurable;
+the results do not claim zero bias or justify subtracting a fixed offset.
+
+## Deadline/evidence/trace APIs — 2026-09-20
+
+The [timing APIs](timing-apis.md) add six protocol regression tests: deadline prediction across
+fractional/reverse/slow/slewed motion, scheduled controls and pause, midnight wrapping, drift-bounded
+interval coverage under asymmetry, explicit contradictory evidence and deterministic estimator
+replay, and publication-time correlation under response reordering. The suite now has 36 protocol
+unit tests and five wire tests. Native integration additionally verifies deadline and diagnostic
+availability over real QUIC. The allocation-counting test includes deadline queries; undrained
+clock diagnostic events do not block synchronization.
+
+Nine compiled-WASM tests pass, including public deadlines/evidence, timestamp diagnostic values,
+exact browser-adapter capture/replay, tamper detection, bounded prefix retention, and disabled
+capture. TypeScript and production bundling pass. These capture tests use compiled WASM in Node;
+they do not measure live browser callback or compositor behavior.
+
+The real HTTP/3 + IPC + compiled-WASM same-instant test passes after these additions:
+
+| Rate | Signed median timecode error | Absolute p95 | Absolute maximum |
+| --- | ---: | ---: | ---: |
+| +1x | +0.342 ms | 0.506 ms | 0.517 ms |
+| -1x | -0.321 ms | 0.364 ms | 0.366 ms |
+| +0.5x | +0.160 ms | 0.182 ms | 0.182 ms |
+| +2x | +0.492 ms | 0.529 ms | 0.532 ms |
+| Paused | 0.000 ms | 0.000 ms | 0.000 ms |
+
+Acquisition took 569 ms. Maximum per-rate independent calibration uncertainty was ±0.028 ms;
+reference offset changed by 0.002 ms during the run. These results remain within the existing
+acceptance target, but do not establish an accuracy improvement over previous runs. The point
+estimator was intentionally not replaced: interval evidence and tracing provide information
+for evaluating future changes.
+
+## User browser trace investigation — 2026-09-20
+
+Two supplied browser captures replayed exactly (1,309 and 1,438 operations, neither truncated).
+This establishes reproducibility, **not** independent accuracy. In the first capture, 64 matched
+exchanges had path RTT 1.291–3.888 ms; remaining slew was at most 0.078 ms and browser read intervals
+reached 22.4 ms. The second had 67 exchanges, RTT p95 3.286 ms (maximum 7.384 ms), at most 0.044 ms
+remaining slew, and read intervals up to 22.8 ms. These captures do not contain a wall reference
+or pixel presentation timestamps, so they cannot establish the actual display offset.
+
+An independent leader PTY test using `tod` measured median sample age at receipt 0.517 ms,
+p95 0.773 ms, maximum 1.191 ms. Sampling intervals were median 17.967 ms, p95 18.333 ms,
+maximum 21.533 ms. This supports a fresh leader sample reaching the terminal input; it does
+not measure when the terminal renders it. The new browser wall-reference pairing provides
+a same-computer TOD accuracy test at sampling time. No fixed visual offset was inferred from
+these measurements or applied as compensation.
+
+
+The subsequent user screenshots include independent same-computer TOD readings of −0.093 ms
+and +0.212 ms (approximately 1 ms wall-clock resolution), including a screenshot where the
+visible labels differ by one frame. At those sample instants, the browser timeline agrees with
+wall time within measurement precision; the visible mismatch is not a frame-sized sampled
+clock error.
+
+A concrete terminal scheduling defect was measured and fixed: the old unrelated refresh timer
+sampled newly crossed 30 fps frames with median 9.933 ms / p95 17.200 ms / maximum 18.133 ms
+lateness. Leader and follower terminals now use the predicted next frame boundary as a wakeup,
+while retaining the refresh cap for status/input. The same PTY test then measured median 1.033 ms /
+p95 1.100 ms / maximum 1.200 ms frame-crossing sample lateness. Terminal/compositor presentation
+latency is excluded from both runs; exact pixel alignment is not claimed. No fixed compensation
+was added. Example smoke tests pass after the change.
+
+Presentation prediction is exposed as a developer API in protocol/native/WASM; its tests cover
+zero delay, fractional/reverse playback with drift and slew, paused output, overflow, fallback,
+future scheduled controls without early latching, and unchanged actual synchronization state.
+The native allocation test covers compensated reads. Eleven compiled-WASM/browser-helper tests
+pass, including independent TOD arithmetic and capture/replay of compensated reads.
+
+The third user export had replay capture disabled (zero operation records), but retained the
+latest 128 clock observations. One 33.591 ms path-RTT outlier was rejected; the stored offset
+and drift were unchanged from the preceding accepted observation. The other 127 observations
+were accepted; RTT median was 2.087 ms and p95 4.585 ms. No independent wall references were
+present in this export. Bounded replay capture is now enabled by default in the web example
+(`?trace=0` opts out), avoiding an export that silently lacks the requested replay evidence.
+
+## Ghostty output-path audit
+
+The previous inference that the remaining mismatch required replacing the terminal display was
+premature. The renderer itself lacked DEC mode 2026 synchronized output and erased changed rows
+before rewriting them. [Ghostty's application-developer guidance](https://ghostty.org/docs/help/synchronized-output)
+identifies unbracketed redraws as an application-side source of tearing on fast terminals.
+
+Leader and follower now build each update in memory, bracket it with synchronized-output begin/end,
+and write/flush it under one stdout lock. Changed rows are overwritten before clearing their unused
+trailing cells. Shutdown defensively ends a synchronized update. The PTY measurement checks complete,
+non-nested transaction markers in addition to sampling metrics. Formatting, Clippy, example builds,
+and cross-process example smoke tests pass. Frame-change sampling lateness remains approximately
+1.1 ms p95. These checks validate the emitted output and sampling behavior; they do not establish
+that the missing redraw transaction caused the full observed visual gap. Live Ghostty inspection
+through Computer Use was blocked by that tool's app safety policy.

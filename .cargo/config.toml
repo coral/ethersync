@@ -1,0 +1,4 @@
+[env]
+# Keep Rust, ring's C/assembly, and generated C++ consistent with Package.swift.
+# An explicit caller setting still wins.
+MACOSX_DEPLOYMENT_TARGET = { value = "13.0", force = false }

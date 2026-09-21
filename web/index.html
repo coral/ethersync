@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Ethersync · Browser follower</title></head>
+<body>
+<main>
+  <header><a href="/">ethersync<span> / web</span></a><span class="badge">BROWSER FOLLOWER</span></header>
+  <section class="display" aria-label="Live timecode">
+    <p class="eyebrow" id="state">Uninitialized</p>
+    <div id="timecode">00:00:00:00</div>
+    <p id="trajectory">30 fps · paused</p>
+    <p>System <span id="system-time">—</span> <small>Local wall clock, independent of Ethersync</small></p>
+  </section>
+  <section class="metrics" aria-label="Synchronization diagnostics">
+    <div><span>Clock uncertainty</span><strong id="uncertainty">—</strong></div>
+    <div><span>Clock drift</span><strong id="drift">—</strong></div>
+    <div><span>Sample age</span><strong id="age">—</strong></div>
+    <div><span>Clock offset</span><strong id="offset">—</strong></div>
+  </section>
+  <form id="connect-form">
+    <div class="fields">
+      <label>Leader address<input id="address" name="address" value="127.0.0.1:4443" placeholder="192.168.1.10:4443" required spellcheck="false"></label>
+      <label>Certificate fingerprint <small>SHA-256, shown by leader</small><input id="pin" name="pin" placeholder="Paste fingerprint" required spellcheck="false" autocomplete="off"></label>
+    </div>
+    <div class="actions"><button id="connect" type="submit">Connect</button><button id="disconnect" type="button" disabled>Disconnect</button><p id="message" role="status">Loading WASM…</p></div>
+  </form>
+  <details><summary>Connection details</summary><dl>
+    <dt>Transport</dt><dd id="transport">—</dd>
+    <dt>Feasible clock offset</dt><dd id="evidence">—</dd>
+    <dt>Source</dt><dd id="source">—</dd>
+    <dt>Same-computer TOD check</dt><dd><span id="tod-reference">—</span><br><small>Valid after running tod on a leader on this computer, with the same timezone. Compares sampled timecode to wall time, not pixels; approximately 1 ms timestamp resolution.</small></dd>
+    <dt>Unwrapped frame</dt><dd id="frames">0</dd>
+    <dt>Timeline adjustment</dt><dd id="adjustment">—</dd>
+    <dt>Discontinuity</dt><dd id="discontinuity">0</dd>
+    <dt>QUIC RTT / lost packets</dt><dd id="stats">Unavailable</dd>
+    <dt>Last correction</dt><dd id="event">—</dd>
+  </dl><p>Clock offset compares independent monotonic clock epochs, not timecode error. Terminal and browser redraws are independent.</p><p>Timing capture is enabled by default. The first 16,384 operations and latest 256 TOD checks are retained. Reload to start a fresh capture; <code>?trace=0</code> disables capture.</p><button id="export-trace" type="button">Export timing trace</button></details>
+  <footer>Direct LAN · MoQ-lite-05 · Rust → WebAssembly<span id="visibility">Keep this tab visible for timing tests.</span></footer>
+</main><script type="module" src="/src/main.ts"></script>
+</body></html>

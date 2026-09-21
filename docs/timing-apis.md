@@ -1,0 +1,171 @@
+# Boundary deadlines, interval evidence, and timing traces
+
+These additions live in `ethersync-protocol` and are shared by native and WASM clients.
+They do not change the protobuf schema, the four-timestamp exchange, or the current point
+estimator. They add local scheduling and evidence needed to evaluate further algorithm changes.
+
+## Predicting a boundary
+
+Native code uses `reader.next_boundary_at(engine.clock().now_ns())`, or the convenience
+`reader.next_boundary()`. Protocol-only users call `View::next_boundary(local_ns)`.
+WASM exposes `follower.next_boundary(performance.now())`.
+
+A result includes a local deadline, unwrapped position, discontinuity identifier, clock
+uncertainty in local-time units, and a kind:
+
+- `Frame`: the next strictly future integer-position crossing in the playback direction.
+  At exactly frame 12, forward playback targets 13 and reverse playback targets 11. At 12.5,
+  reverse playback targets 12. This is a phase crossing, not the instant a floor-formatted
+  reverse timecode label changes.
+- `ScheduledChange`: a retained control takes effect before (or simultaneously with) that
+  frame crossing. This wakeup can seek, change speed, pause, or start paused playback.
+  Its position need not be an integer. Recompute after the control.
+
+Paused playback without a future control, uninitialized synchronization, or no representable
+future deadline returns `None` (undefined in the WASM binding). Holdover still predicts
+boundaries, with growing uncertainty. Drop-frame and midnight affect labels only.
+
+The calculation uses bounded monotonic searches over integer local nanoseconds, evaluating
+exactly the same Q32 trajectory and bounded slew as `read_at`. It returns the first nanosecond
+that reaches the target, avoiding a rounded-early inverse. Searches end before a scheduled
+control, where the trajectory could cease to be monotonic. There are at most two searches,
+with at most 63 bisections each. Native/protocol evaluation allocates nothing and does not
+lock, sleep, or perform networking; WASM result serialization allocates.
+
+A deadline is a prediction from one snapshot, not a scheduled callback. New anchors, clock
+mappings, or correction updates can invalidate it. Refresh predictions when state changes,
+and read the current state on wakeup. OS timers and browser rendering cannot be assumed to
+honor nanosecond deadlines. The returned uncertainty covers clock mapping (including holdover
+and a conservative allowance for reduced velocity during slew), not source timestamp error,
+execution jitter, or screen presentation.
+
+WASM returns `localDeadlineMs`, exact decimal-string `frames`, `subframe`, decimal-string
+`discontinuity`, `kind`, and `uncertaintyMs`. Millisecond deadlines use JS numbers; wire/frame
+integers remain exact inside Rust.
+
+## Offset interval evidence
+
+`ClockMapping::evidence` and `Reading::status.offset_evidence` expose `OffsetEvidence`:
+reference timestamp, lower/upper offset endpoints, number of supporting observations, and
+`consistent()`. WASM `read().offsetEvidence` provides millisecond endpoints and a boolean.
+
+With constant offset and nonnegative path delays, an exchange constrains offset to:
+
+```
+t3 - t4 <= offset <= t2 - t1
+```
+
+For each accepted exchange, the implementation starts with its midpoint offset ± half the
+path delay. It widens that interval by 500 ppm of half the complete exchange duration,
+500 ppm of distance from the midpoint to the common reference time, and a 100 µs timestamp
+allowance. This permits a relative oscillator rate anywhere within ±500 ppm without using
+the fitted drift as independent evidence. Intersect all accepted observations retained in
+the bounded 128-sample/32-second history. The result is independent of low-delay regression.
+At another read time, a consistent interval expands by 500 ppm of elapsed time.
+
+If lower exceeds upper, the constraints are inconsistent. Preserve that fact until conflicting
+samples expire or reacquisition replaces the history; holdover must not magically make an
+empty intersection trustworthy. Do not clamp the estimate into the interval or pretend it
+is an accurate symmetric confidence distribution. This is a diagnostic feasibility test
+under explicit assumptions, not proof of a correct clock. Quarantined/rejected observations
+do not constrain this accepted-history interval; their rejection is available in the trace.
+The existing clock uncertainty and estimator behavior remain separate.
+
+## Timestamp placement and diagnostics
+
+Native and browser transports prepare the MoQ presentation timestamp before sampling t1/t3,
+then encode and publish. Receive timestamps are taken immediately after the application's
+receive operation returns, before parsing. The original t4 is retained through native queues.
+No MoQ presentation timestamp is used as a receive timestamp: the published `moq-net 0.2.22`
+datagram API provides presentation time and payload, not a kernel/hardware arrival timestamp.
+
+`ClockObservation` records the four timestamps, accepted/rejected result, resulting mapping,
+interval evidence, optional t1-to-publication-return duration, and receipt-to-processing-entry
+delay. These durations are diagnostic; they are not subtracted from RTT or treated as known
+one-way network delays. Leader residence is already observable as t3−t2. Hidden transport,
+kernel, radio, and browser callback queues remain included in the measured path.
+
+The core keeps the last 128 estimator observations, including rejections, via
+`ClockEstimator::trace()`. Replaying their exchanges through `observe()` is deterministic
+when starting with equivalent estimator state; an evicted prefix requires a warmup or saved
+state. Native `FollowerConfig::clock_diagnostics = true` additionally emits
+`Event::ClockObservation` through the existing bounded nonblocking channel. A slow event
+consumer can lose diagnostics without blocking synchronization; this event stream alone is
+not guaranteed to be a complete replay log. Session changes reset estimator history.
+
+WASM exposes `probe_published(nowMs)`, `reply_timed(bytes, receivedMs, processedMs)`, and
+`clock_trace()`. Publication timing is correlated with each outstanding request even if
+responses reorder. All supplied times must use the same monotonic epoch. Trace nanosecond
+integers are decimal strings to avoid JS integer precision loss. Ordinary `reply(bytes, nowMs)`
+still works when additional timing observations are unavailable.
+
+## Browser capture and replay
+
+1. Open the web app **before connecting**. Bounded capture is enabled by default; `?trace=0` opts out.
+2. Connect and exercise playback, latency changes, reconnects, and rendering load.
+3. Under Connection details, click **Export timing trace**.
+4. From the repository root run:
+
+   ```sh
+   pnpm --dir web replay /path/to/ethersync-timing.json
+   ```
+
+The log records lifecycle, raw snapshot/probe/reply bytes, monotonic call times, publication
+completion, reads used for rendering, and returned values/errors. Capture happens after each
+operation. It has overhead, including between probe creation and publication; the publication
+diagnostic includes that overhead. It does not observe compositor presentation time.
+
+Capture retains the first 16,384 operations and then counts omissions instead of evicting the
+startup state. Oversized (>512-byte) message arguments also stop the retained prefix. Reload
+for a fresh capture. Export identifies truncation and also includes the latest bounded clock
+observations for inspection. Replay uses only the complete retained prefix with a fresh
+compiled-WASM follower and checks operation results exactly, including probe bytes, deadlines,
+and rendered readings. Use the same code build for exact comparison. Synthetic compiled-WASM
+capture/replay and truncation tests pass; real browser scheduling remains a separate measurement.
+
+## Client-owned presentation prediction
+
+Use `View::evaluate_for_presentation(now_ns, compensation_delay_ns)` in the protocol core,
+`TimecodeReader::read_for_presentation_at(now_ns, Duration)` (or `read_for_presentation(Duration)`)
+in the native library, and `follower.read_for_presentation(performance.now(), delayMs)` in WASM.
+This is an output-adapter API, not an end-user calibration control.
+
+Positive delay evaluates at `now + delay`: the position needed when this output becomes visible
+or audible. Evaluate local time through clock offset/drift and then the complete timeline,
+including signed playback, slew, and known scheduled changes. Paused output remains paused unless
+a known control starts it before presentation. Zero delay matches an ordinary read. Prediction
+never latches future controls or advances the follower's actual staleness clock. Diagnostics such
+as mapping uncertainty and sample age refer to the prediction horizon; connection state refers
+to the present. Invalid/negative JS delays and timestamp overflow are rejected.
+
+The adapter owns the delay estimate from the timestamp it supplies to actual presentation.
+Include known application buffering, device latency, and elapsed preparation time once each.
+Do not add RTT, leader residence, clock offset, or snapshot age: synchronization and anchor
+extrapolation already account for those. Positive compensation advances forward playback; it
+cannot correct a slower reference display by delaying an already-faster display. Unannounced
+future controls and unknown device/compositor latency cannot be inferred by the library.
+No automatic fixed frame offset or user-entered browser compensation is applied.
+
+## Independent same-computer TOD check
+
+The browser now pairs `Date.now()` with bracketed `performance.now()` and evaluates its reading
+at the bracket midpoint. Under Connection details, **Same-computer TOD check** reports the signed
+difference between that sampled timeline and local wall time. It is valid after issuing `tod`
+on a leader on the same computer using the same timezone, while running at +1×, without a later
+wall-clock adjustment. This reference does not use the Ethersync clock estimator. Millisecond wall
+timestamps and the bracket limit precision; it does not measure either screen's presentation.
+
+With capture enabled, the latest 256 paired readings are included as `wallReferences`, independently
+of the replayable operation prefix. `pnpm --dir web analyze /path/to/trace.json` summarizes RTT,
+remaining slew, read cadence, and the independent TOD differences when present. Earlier trace
+files lack wall references: exact replay of those files establishes reproducibility, not accuracy.
+`python3 scripts/measure_display.py --tod` independently measures leader TOD sample age at PTY
+receipt, excluding terminal/compositor latency.
+
+Both terminal examples and the browser also display an independent **System HH:MM:SS.mmm**
+reference beside their timecode. The terminal pairs its wall-clock sample with the midpoint
+of two engine monotonic reads and reports its own TOD difference. These system-clock labels
+bypass the Ethersync mapping and timeline. Comparing them on screen is a control experiment:
+a similar gap in both system-clock labels exists independently of the synchronization math;
+agreement of system clocks but disagreement in timecode calls for further timeline/clock auditing.
+The test must use the same computer/timezone. It does not assume Ghostty is slow or insert an offset.

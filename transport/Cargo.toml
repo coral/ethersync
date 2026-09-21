@@ -1,0 +1,28 @@
+[package]
+name = "ethersync-transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+moq-core.workspace = true
+mio = { version = "1", features = ["net", "os-poll"] }
+quinn-proto = { version = "0.11.18", default-features = false, features = ["rustls-ring", "log"] }
+quinn-udp = "0.5.15"
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
+sha2 = "0.11"
+time = "0.3"
+bytes = "1"
+web-transport-trait = "0.4"
+web-transport-proto = "0.6"
+thiserror.workspace = true
+tracing = "0.1"
+http = "1"
+url = "2"
+
+[dev-dependencies]
+moq-net = "0.2.22"
+moq-native = { version = "0.19.19", default-features = false, features = ["quinn", "ring"] }
+tokio = { version = "1.53.1", features = ["rt", "time", "macros", "net"] }
