@@ -6,6 +6,41 @@ use std::{
 use web_transport_trait::poll::Session;
 
 #[test]
+fn udp_readiness_is_rearmed_after_draining() {
+    let mut endpoint = Endpoint::new("127.0.0.1:0".parse().unwrap(), None, 1).unwrap();
+    let mut poll = mio::Poll::new().unwrap();
+    let token = mio::Token(1);
+    endpoint.register(poll.registry(), token).unwrap();
+    let sender = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let mut events = mio::Events::with_capacity(8);
+
+    for burst in 0..3 {
+        // Drain through Quinn's raw-socket receive path until WouldBlock.
+        endpoint.step(Instant::now()).unwrap();
+        assert!(!endpoint.needs_pass());
+        // Malformed QUIC needs no connection or protocol timer to wake us.
+        sender
+            .send_to(&[0], endpoint.local_addr().unwrap())
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            assert!(
+                !remaining.is_zero(),
+                "missing UDP readiness for burst {burst}"
+            );
+            poll.poll(&mut events, Some(remaining)).unwrap();
+            if events
+                .iter()
+                .any(|event| event.token() == token && event.is_readable())
+            {
+                break;
+            }
+        }
+    }
+}
+
+#[test]
 fn directly_driven_quic_datagrams_and_pinning() {
     let (config, pin) = tls::server().unwrap();
     let mut server = Endpoint::new("127.0.0.1:0".parse().unwrap(), Some(config), 16).unwrap();

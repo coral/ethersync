@@ -8,7 +8,8 @@ int main(void) {
     EsResultReading read = es_core_read(core, 123);
     CHECK(read.status == 0 && read.value.fps_numerator == 30);
     const uint8_t bytes[] = {255};
-    EsResultUnit bad = es_core_state(core, (EsBytes){bytes, 1}, 123);
+    const EsBytes malformed = {bytes, 1};
+    EsResultUnit bad = es_core_state(core, malformed, 123);
     CHECK(bad.status != 0 && bad.error);
     es_buffer_dispose(&bad.error);
     es_core_dispose(&core);

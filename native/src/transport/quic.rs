@@ -607,11 +607,15 @@ impl Endpoint {
         for _ in 0..32 {
             if self.receive_pending.is_none() {
                 let mut meta = [quinn_udp::RecvMeta::default()];
-                let n = match self.udp.recv(
-                    (&self.socket).into(),
-                    &mut [IoSliceMut::new(&mut self.buffer)],
-                    &mut meta,
-                ) {
+                // Quinn uses the raw socket. Mio must observe WouldBlock to
+                // re-arm readiness notifications, particularly on Windows.
+                let n = match self.socket.try_io(|| {
+                    self.udp.recv(
+                        (&self.socket).into(),
+                        &mut [IoSliceMut::new(&mut self.buffer)],
+                        &mut meta,
+                    )
+                }) {
                     Ok(n) => n,
                     Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                         self.receive_more = false;
@@ -778,7 +782,10 @@ impl Endpoint {
                 segment_size: t.segment_size,
                 src_ip: t.src_ip,
             };
-            match self.udp.send((&self.socket).into(), &transmit) {
+            match self
+                .socket
+                .try_io(|| self.udp.send((&self.socket).into(), &transmit))
+            {
                 Ok(()) => {
                     if self.write_blocked {
                         self.write_blocked = false;
