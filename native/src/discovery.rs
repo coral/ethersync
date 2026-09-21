@@ -181,6 +181,12 @@ impl Advertisement {
         .map_err(err)?;
         if addresses.is_empty() {
             service = service.enable_addr_auto();
+            // An IPv4 wildcard listens on every IPv4 interface, not on IPv6.
+            // Keep automatic publication in sync with the listener while still
+            // tracking both Ethernet and Wi-Fi (and later interface changes).
+            if c.bind.is_ipv4() {
+                service.set_interfaces(vec![mdns_sd::IfKind::IPv4]);
+            }
         }
         let name = service.get_fullname().to_owned();
         daemon.register(service).map_err(err)?;

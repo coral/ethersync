@@ -345,3 +345,61 @@ fn clock_diagnostics_preserve_receipt_timestamps_and_deadlines() {
     engine.shutdown().unwrap();
     leader_engine.shutdown().unwrap();
 }
+
+// Every destination uses the same wildcard-bound socket, port, certificate,
+// and timeline. Keep all followers alive together to test inbound fan-in.
+fn wildcard_followers(addresses: &[std::net::Ipv4Addr]) {
+    let engine = Engine::new().unwrap();
+    let leader = engine
+        .leader(LeaderConfig {
+            advertise: false,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(leader.info().address.ip(), std::net::Ipv4Addr::UNSPECIFIED);
+    let mut followers = Vec::new();
+    for address in addresses {
+        let remote = std::net::SocketAddr::new((*address).into(), leader.info().address.port());
+        let mut config = FollowerConfig::direct(remote);
+        config.trust = Trust::Pinned(leader.info().fingerprint.clone());
+        let follower = engine.follower(config).unwrap();
+        let reader = follower.reader().unwrap();
+        followers.push((follower, reader));
+    }
+    for (follower, reader) in &mut followers {
+        wait(reader, follower, |reading| {
+            reading.status.synchronization == SyncState::Synchronized
+        });
+    }
+    leader
+        .set_transport(Position::from_frames(1234), Rate::PAUSED, None)
+        .unwrap();
+    for (follower, reader) in &mut followers {
+        wait(reader, follower, |reading| {
+            reading.position == Position::from_frames(1234)
+        });
+        follower.reconnect().unwrap();
+        wait(reader, follower, |reading| {
+            reading.status.synchronization == SyncState::Synchronized
+        });
+    }
+    engine.shutdown().unwrap();
+}
+
+#[test]
+fn wildcard_listener_accepts_multiple_followers() {
+    wildcard_followers(&[std::net::Ipv4Addr::LOCALHOST; 2]);
+}
+
+#[test]
+#[ignore = "set ETHERSYNC_TEST_LOCAL_IPS to two or more local IPv4 addresses"]
+fn wildcard_listener_accepts_multiple_local_addresses() {
+    let addresses: Vec<std::net::Ipv4Addr> = std::env::var("ETHERSYNC_TEST_LOCAL_IPS")
+        .expect("set ETHERSYNC_TEST_LOCAL_IPS to local IPv4 addresses separated by commas")
+        .split(',')
+        .map(|ip| ip.trim().parse().unwrap())
+        .collect();
+    assert!(addresses.len() >= 2);
+    assert!(addresses.iter().any(|address| *address != addresses[0]));
+    wildcard_followers(&addresses);
+}

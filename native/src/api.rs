@@ -68,6 +68,8 @@ impl Timing {
 }
 #[derive(Clone, Debug)]
 pub struct LeaderConfig {
+    /// `0.0.0.0:PORT` accepts connections to every local IPv4 address, including
+    /// simultaneous Ethernet and Wi-Fi clients. A specific IP restricts the listener.
     pub bind: SocketAddr,
     pub name: String,
     pub identity: String,

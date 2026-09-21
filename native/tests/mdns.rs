@@ -31,6 +31,7 @@ fn mdns_advertise_resolve_duplicate_names_and_withdraw() {
             for l in matches {
                 assert_eq!(l.protocol_version, 1);
                 assert!(!l.addresses.is_empty());
+                assert!(l.addresses.iter().all(|address| address.is_ipv4()));
                 assert_eq!(l.name, "🎬".repeat(15));
                 assert!(FollowerConfig::discovered(l, l.addresses[0]).is_ok());
             }
