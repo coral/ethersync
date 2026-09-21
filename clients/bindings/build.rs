@@ -1,5 +1,6 @@
 //! Schema compiler for the public functions/records in src/api.rs. Deliberately
 //! rejects unsupported types instead of silently generating a partial binding.
+mod cpp;
 mod csharp;
 mod wrappers;
 use quote::ToTokens;
@@ -64,11 +65,15 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=wrappers.rs");
     println!("cargo:rerun-if-changed=csharp.rs");
+    println!("cargo:rerun-if-changed=cpp.rs");
     println!("cargo:rerun-if-changed=templates");
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         println!(
             "cargo:rustc-link-arg-cdylib=-Wl,-install_name,@rpath/libethersync_bindings.dylib"
         );
+    }
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!("cargo:rustc-link-arg-cdylib=-Wl,-soname,libethersync_bindings.so");
     }
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let native = env::var_os("CARGO_FEATURE_NATIVE").is_some();
@@ -156,112 +161,6 @@ fn main() {
         manifest += &format!("{}\n", f.sig.to_token_stream());
     }
     fs::write(out.join("API.txt"), manifest).unwrap();
-    if env::var_os("CARGO_FEATURE_CPP").is_some() {
-        let boxed = |t: &str| {
-            if opaque.contains(t) {
-                format!("Box<{t}>")
-            } else {
-                t.into()
-            }
-        };
-        let mut bridge = String::from("#[cxx::bridge(namespace = \"ethersync\")] mod ffi {\n");
-        for name in records.keys() {
-            bridge += &format!("#[derive(Clone, Copy)] struct {name}{{{}}}\n", fields(name));
-        }
-        bridge += "extern \"Rust\" {\n";
-        let mut body = String::new();
-        for name in &opaque {
-            bridge += &format!("type {name};\n");
-            body += &format!("use crate::api::{name};\n");
-        }
-        let outcomes: BTreeSet<_> = functions
-            .iter()
-            .filter_map(|f| {
-                let (t, r) = output(f);
-                r.then_some(t)
-            })
-            .collect();
-        for t in outcomes {
-            let name = format!("Outcome{}", suffix(&t));
-            let stored = if records.contains_key(&t) {
-                format!("ffi::{t}")
-            } else {
-                boxed(&t)
-            };
-            bridge += &format!(
-                "type {name}; fn {name}_ok(value:&{name})->bool; fn {name}_error(value:&{name})->&str;"
-            );
-            if t != "()" {
-                bridge += &format!("fn {name}_take(value:&mut {name})->{};", boxed(&t));
-            }
-            body += &format!(
-                "pub struct {name}{{value:Option<{stored}>,error:String}}\n#[allow(non_snake_case)] fn {name}_ok(value:&{name})->bool{{value.value.is_some()}}\n#[allow(non_snake_case)] fn {name}_error(value:&{name})->&str{{&value.error}}\n"
-            );
-            if t != "()" {
-                body += &format!(
-                    "#[allow(non_snake_case)] fn {name}_take(value:&mut {name})->{stored}{{value.value.take().expect(\"check outcome.ok and take only once\")}}\n"
-                );
-            }
-        }
-        for f in &functions {
-            let name = f.sig.ident.to_string();
-            let (t, result) = output(f);
-            let a = args(f);
-            let decl = a
-                .iter()
-                .map(|(n, t)| format!("{n}:{}", t.replace("&mut", "&mut ")))
-                .collect::<Vec<_>>()
-                .join(",");
-            let call = format!(
-                "crate::api::{name}({})",
-                a.iter()
-                    .map(|(n, _)| n.clone())
-                    .collect::<Vec<_>>()
-                    .join(",")
-            );
-            let ret = if result {
-                format!("Box<Outcome{}>", suffix(&t))
-            } else {
-                boxed(&t)
-            };
-            bridge += &format!("fn {name}({decl})->{ret};\n");
-            let wrap = |v: &str| {
-                if opaque.contains(&t) {
-                    format!("Box::new({v})")
-                } else if records.contains_key(&t) {
-                    format!("ffi::{t}::from({v})")
-                } else {
-                    v.into()
-                }
-            };
-            let expr = if result {
-                format!(
-                    "Box::new(match {call}{{Ok(v)=>Outcome{}{{value:Some({}),error:String::new()}},Err(error)=>Outcome{}{{value:None,error}}}})",
-                    suffix(&t),
-                    wrap("v"),
-                    suffix(&t)
-                )
-            } else {
-                wrap(&call)
-            };
-            let rust_ret = if records.contains_key(&t) && !result {
-                format!("ffi::{t}")
-            } else {
-                ret
-            };
-            body += &format!("fn {name}({decl})->{rust_ret}{{{expr}}}\n");
-        }
-        bridge += "}}\n";
-        for name in records.keys() {
-            body += &convert(name);
-        }
-        let file = out.join("cpp.rs");
-        fs::write(&file, (bridge + &body).replace("->()", "")).unwrap();
-        cxx_build::bridge(&file)
-            .flag_if_supported("-fno-exceptions")
-            .std("c++17")
-            .compile("ethersync-cxx");
-    }
     if env::var_os("CARGO_FEATURE_SWIFT").is_some() {
         let mut bridge = String::from("#[swift_bridge::bridge] mod ffi {\n");
         let mut body = String::new();
@@ -456,24 +355,6 @@ fn main() {
     fs::copy(out.join("API.txt"), generated.join("API.txt")).unwrap();
     if env::var_os("CARGO_FEATURE_C").is_some() {
         fs::copy(out.join("ethersync.h"), generated.join("ethersync.h")).unwrap();
-    }
-    if env::var_os("CARGO_FEATURE_CPP").is_some() {
-        fn find_header(path: &std::path::Path) -> Option<PathBuf> {
-            for item in fs::read_dir(path).ok()? {
-                let item = item.ok()?;
-                let path = item.path();
-                if path.is_dir() {
-                    if let Some(p) = find_header(&path) {
-                        return Some(p);
-                    }
-                } else if item.file_name() == "cpp.rs.h" {
-                    return Some(path);
-                }
-            }
-            None
-        }
-        let header = find_header(&out.join("cxxbridge/include")).expect("cxx header");
-        fs::copy(header, generated.join("ethersync.hpp")).unwrap();
     }
     if env::var_os("CARGO_FEATURE_SWIFT").is_some() {
         for (from, to) in [

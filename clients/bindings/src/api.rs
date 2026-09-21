@@ -179,40 +179,40 @@ pub fn core_read_for_presentation(core: &Core, now_ns: u64, delay_ns: u64) -> Re
 
 #[cfg(feature = "native")]
 pub struct Engine {
-    inner: std::sync::Arc<ethersync::Engine>,
+    inner: std::sync::Arc<libethersync::Engine>,
 }
 #[cfg(feature = "native")]
 pub struct LeaderOptions {
-    inner: ethersync::LeaderConfig,
+    inner: libethersync::LeaderConfig,
 }
 #[cfg(feature = "native")]
 pub struct FollowerOptions {
-    inner: ethersync::FollowerConfig,
+    inner: libethersync::FollowerConfig,
 }
 #[cfg(feature = "native")]
 pub struct Leader {
-    inner: ethersync::Leader,
-    _engine: std::sync::Arc<ethersync::Engine>,
+    inner: libethersync::Leader,
+    _engine: std::sync::Arc<libethersync::Engine>,
 }
 #[cfg(feature = "native")]
 pub struct Follower {
-    inner: ethersync::Follower,
-    _engine: std::sync::Arc<ethersync::Engine>,
+    inner: libethersync::Follower,
+    _engine: std::sync::Arc<libethersync::Engine>,
 }
 #[cfg(feature = "native")]
 pub struct Reader {
-    inner: ethersync::TimecodeReader,
+    inner: libethersync::TimecodeReader,
 }
 #[cfg(feature = "native")]
 pub struct Discovery {
-    inner: ethersync::Discovery,
-    _engine: std::sync::Arc<ethersync::Engine>,
-    leaders: Vec<ethersync::DiscoveredLeader>,
+    inner: libethersync::Discovery,
+    _engine: std::sync::Arc<libethersync::Engine>,
+    leaders: Vec<libethersync::DiscoveredLeader>,
 }
 #[cfg(feature = "native")]
 pub fn engine_new() -> Result<Engine> {
     Ok(Engine {
-        inner: std::sync::Arc::new(ethersync::Engine::new().map_err(error)?),
+        inner: std::sync::Arc::new(libethersync::Engine::new().map_err(error)?),
     })
 }
 #[cfg(feature = "native")]
@@ -259,9 +259,9 @@ pub fn leader_options_format(
 #[cfg(feature = "native")]
 pub fn leader_options_tracked(options: &mut LeaderOptions, tracked: bool) {
     options.inner.source_kind = if tracked {
-        ethersync::SourceKind::Tracked
+        libethersync::SourceKind::Tracked
     } else {
-        ethersync::SourceKind::Generated
+        libethersync::SourceKind::Generated
     };
 }
 #[cfg(feature = "native")]
@@ -333,7 +333,7 @@ pub fn leader_track(
 ) -> Result<()> {
     leader
         .inner
-        .track(ethersync::SourceSample {
+        .track(libethersync::SourceSample {
             position: Position { frames, subframe },
             timestamp_ns,
             rate_hint: if has_rate {
@@ -358,7 +358,7 @@ pub fn leader_shutdown(leader: &Leader) -> Result<()> {
 #[cfg(feature = "native")]
 pub fn follower_options_new(address: &str) -> Result<FollowerOptions> {
     Ok(FollowerOptions {
-        inner: ethersync::FollowerConfig::direct(address.parse().map_err(error)?),
+        inner: libethersync::FollowerConfig::direct(address.parse().map_err(error)?),
     })
 }
 #[cfg(feature = "native")]
@@ -369,9 +369,9 @@ pub fn follower_options_bind(options: &mut FollowerOptions, address: &str) -> Re
 #[cfg(feature = "native")]
 pub fn follower_options_pin(options: &mut FollowerOptions, fingerprint: &str) {
     options.inner.trust = if fingerprint.is_empty() {
-        ethersync::Trust::TrustedLan
+        libethersync::Trust::TrustedLan
     } else {
-        ethersync::Trust::Pinned(fingerprint.into())
+        libethersync::Trust::Pinned(fingerprint.into())
     };
 }
 #[cfg(feature = "native")]
@@ -533,9 +533,9 @@ fn timing(
     connect_timeout_ns: u64,
     retry_min_ns: u64,
     retry_max_ns: u64,
-) -> ethersync::Timing {
+) -> libethersync::Timing {
     use std::time::Duration as D;
-    ethersync::Timing {
+    libethersync::Timing {
         acquisition_probe: D::from_nanos(acquisition_ns),
         steady_probe: D::from_nanos(steady_ns),
         heartbeat: D::from_nanos(heartbeat_ns),
@@ -654,7 +654,7 @@ pub fn discovery_shutdown(discovery: &mut Discovery) -> Result<()> {
 /// 4 source health, 5 error. Event strings are separate from the reading path.
 #[cfg(feature = "native")]
 pub struct Event {
-    inner: Option<ethersync::Event>,
+    inner: Option<libethersync::Event>,
 }
 #[cfg(feature = "native")]
 #[repr(C)]
@@ -695,11 +695,11 @@ pub fn event_data(event: &Event) -> EventData {
     let mut data = EventData::default();
     match &event.inner {
         None => {}
-        Some(ethersync::Event::Connection(state)) => {
+        Some(libethersync::Event::Connection(state)) => {
             data.kind = 1;
             data.state = *state as u8;
         }
-        Some(ethersync::Event::Correction(c)) => {
+        Some(libethersync::Event::Correction(c)) => {
             data.kind = 2;
             match c {
                 timeline::Correction::Discontinuity(d) => {
@@ -717,7 +717,7 @@ pub fn event_data(event: &Event) -> EventData {
                 timeline::Correction::NewSession => data.correction_kind = 4,
             }
         }
-        Some(ethersync::Event::ClockObservation(o)) => {
+        Some(libethersync::Event::ClockObservation(o)) => {
             data.kind = 3;
             data.t1 = o.exchange.t1;
             data.t2 = o.exchange.t2;
@@ -731,12 +731,12 @@ pub fn event_data(event: &Event) -> EventData {
             data.drift_ppm = o.mapping.drift * 1e6;
             data.uncertainty_ns = o.mapping.uncertainty_ns;
         }
-        Some(ethersync::Event::SourceHealth(health)) => {
+        Some(libethersync::Event::SourceHealth(health)) => {
             data.kind = 4;
             data.state = *health as u8;
         }
-        Some(ethersync::Event::Error(_)) => data.kind = 5,
-        Some(ethersync::Event::ProbeTiming { lateness_ns }) => {
+        Some(libethersync::Event::Error(_)) => data.kind = 5,
+        Some(libethersync::Event::ProbeTiming { lateness_ns }) => {
             data.kind = 6;
             data.probe_lateness_ns = *lateness_ns;
         }
@@ -746,7 +746,7 @@ pub fn event_data(event: &Event) -> EventData {
 #[cfg(feature = "native")]
 pub fn event_message(event: &Event) -> String {
     match &event.inner {
-        Some(ethersync::Event::Error(e)) => e.clone(),
+        Some(libethersync::Event::Error(e)) => e.clone(),
         _ => String::new(),
     }
 }
@@ -756,7 +756,7 @@ pub fn follower_options_diagnostics(options: &mut FollowerOptions, enabled: bool
 }
 #[cfg(feature = "native")]
 pub struct DiscoveryOptions {
-    inner: ethersync::DiscoveryConfig,
+    inner: libethersync::DiscoveryConfig,
 }
 #[cfg(feature = "native")]
 pub fn discovery_options_new() -> DiscoveryOptions {
@@ -805,7 +805,7 @@ pub fn follower_options_discovered(
         .get(address_index as usize)
         .ok_or("address index")?;
     Ok(FollowerOptions {
-        inner: ethersync::FollowerConfig::discovered(leader, address).map_err(error)?,
+        inner: libethersync::FollowerConfig::discovered(leader, address).map_err(error)?,
     })
 }
 /// Configure a runtime-free follower before processing packets. Rejects invalid
@@ -927,7 +927,7 @@ pub fn follower_options_endpoint(endpoint: &Endpoint) -> Result<FollowerOptions>
         return Err("a follower needs a concrete IP address and nonzero port".into());
     }
     Ok(FollowerOptions {
-        inner: ethersync::FollowerConfig::direct(endpoint.inner),
+        inner: libethersync::FollowerConfig::direct(endpoint.inner),
     })
 }
 #[cfg(feature = "native")]

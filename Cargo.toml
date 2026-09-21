@@ -1,5 +1,5 @@
 [workspace]
-members = ["protocol", "lib", "app", "clients/wasm", "transport", "clients/bindings", "clients/sdk"]
+members = ["protocol", "native", "clients/wasm", "clients/bindings", "clients/sdk"]
 resolver = "3"
 
 [workspace.package]

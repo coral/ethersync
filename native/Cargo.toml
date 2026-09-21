@@ -1,0 +1,47 @@
+[package]
+name = "libethersync"
+autoexamples = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository = "https://github.com/coral/ethersync"
+publish = ["crates-io"]
+description = "Native LAN timecode synchronization"
+
+[dependencies]
+moq-core.workspace = true
+quinn-proto = { version = "0.11.18", default-features = false, features = ["rustls-ring", "log"] }
+quinn-udp = "0.5.15"
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
+sha2 = "0.11"
+time = "0.3"
+bytes = "1"
+web-transport-proto = "0.6"
+tracing = "0.1"
+http = "1"
+url = "2"
+mio = { version = "1", features = ["net", "os-poll"] }
+web-transport-trait = "0.4"
+ethersync-protocol = { path = "../protocol", version = "0.1.0" }
+thiserror.workspace = true
+mdns-sd = "0.21.3"
+triple_buffer = "9.0.0"
+uuid = { version = "1.26.1", features = ["v4"] }
+
+[[example]]
+name = "leader"
+path = "examples/leader.rs"
+[[example]]
+name = "follower"
+path = "examples/follower.rs"
+[[example]]
+name = "tracked"
+path = "examples/tracked.rs"
+
+[dev-dependencies]
+moq-net = "0.2.22"
+moq-native = { version = "0.19.19", default-features = false, features = ["quinn", "ring"] }
+tokio = { version = "1.53.1", features = ["rt", "sync", "time", "macros", "net"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+crossterm = "0.29.0"

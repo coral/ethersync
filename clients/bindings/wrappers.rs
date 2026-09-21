@@ -5,7 +5,7 @@ use std::{
     fs,
     path::Path,
 };
-fn snake(name: &str) -> String {
+pub(super) fn snake(name: &str) -> String {
     name.chars()
         .enumerate()
         .flat_map(|(i, c)| {
@@ -30,10 +30,10 @@ fn camel(name: &str) -> String {
     }
     out
 }
-fn base(t: &str) -> &str {
+pub(super) fn base(t: &str) -> &str {
     t.trim_start_matches('&').trim_start_matches("mut")
 }
-fn scalar(t: &str, swift: bool) -> String {
+pub(super) fn scalar(t: &str, swift: bool) -> String {
     match (t, swift) {
         ("()", true) => "Void",
         ("()", false) => "void",
@@ -222,115 +222,7 @@ pub fn generate(
         fs::write(dir.join("EthersyncClient.swift"), s).unwrap();
     }
     if std::env::var_os("CARGO_FEATURE_CPP").is_some() {
-        let mut s = String::from(
-            "// Generated; do not edit.\n#pragma once\n#include \"ethersync.hpp\"\n#include <optional>\n#include <string>\n#include <string_view>\n#include <vector>\n#include <utility>\n#include <cstdlib>\nnamespace ethersync::client {\ntemplate<class T> class Result { std::optional<T> value_; std::string error_; public: explicit Result(T value):value_(std::move(value)){} static Result failure(std::string error){return Result(std::move(error),0);} explicit operator bool() const {return value_.has_value();} const std::string& error() const{return error_;} T& value(){if(!value_)std::abort();return *value_;} T take(){if(!value_)std::abort();T result=std::move(*value_);value_.reset();return result;} private: Result(std::string error,int):error_(std::move(error)){} };\ntemplate<> class Result<void> { bool ok_; std::string error_; public: Result():ok_(true){} static Result failure(std::string error){Result r;r.ok_=false;r.error_=std::move(error);return r;} explicit operator bool() const{return ok_;} const std::string& error() const{return error_;} };\n",
-        );
-        for t in opaque {
-            s += &format!("class {t};\n");
-        }
-        for t in records.keys() {
-            s += &format!("using {t} = ::ethersync::{t};\n");
-        }
-        let typ = |t: &str| match t {
-            "String" => "std::string".into(),
-            "&str" => "std::string_view".into(),
-            "Vec<u8>" => "std::vector<uint8_t>".into(),
-            "&[u8]" => "const std::vector<uint8_t>&".into(),
-            _ if t.starts_with('&') => format!("{}&", base(t)),
-            _ => scalar(t, false),
-        };
-        let mut bodies = String::new();
-        for t in opaque {
-            s += &format!(
-                "class {t} {{ rust::Box<::ethersync::{t}> raw_; public:\nexplicit {t}(rust::Box<::ethersync::{t}> raw):raw_(std::move(raw)){{}}\n{t}({t}&&)=default; {t}& operator=({t}&&)=default; {t}(const {t}&)=delete; {t}& operator=(const {t}&)=delete;\n::ethersync::{t}& raw(){{return *raw_;}}\n"
-            );
-            for f in functions
-                .iter()
-                .filter(|f| owner(&f.sig.ident.to_string()) == *t)
-            {
-                let name = f.sig.ident.to_string();
-                let method = name.strip_prefix(&(snake(t) + "_")).unwrap();
-                let method = if method == "new" { "create" } else { method };
-                let a = args(f);
-                let instance = a
-                    .first()
-                    .is_some_and(|(_, ty)| ty.starts_with('&') && base(ty) == t);
-                let (ret, fallible) = output(f);
-                let rt = if fallible {
-                    format!("Result<{}>", typ(&ret))
-                } else {
-                    typ(&ret)
-                };
-                let decl = a[usize::from(instance)..]
-                    .iter()
-                    .map(|(n, t)| format!("{} {n}", typ(t)))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                s += &format!(
-                    "{} {rt} {method}({decl});\n",
-                    if instance { "" } else { "static" }
-                );
-                bodies += &format!("inline {rt} {t}::{method}({decl}) {{\n");
-                let callargs = a
-                    .iter()
-                    .enumerate()
-                    .map(|(i, (n, t))| {
-                        if instance && i == 0 {
-                            "*raw_".into()
-                        } else if opaque.contains(base(t)) {
-                            format!("{n}.raw()")
-                        } else if t == "&str" {
-                            format!("rust::Str({n}.data(),{n}.size())")
-                        } else if t == "&[u8]" {
-                            format!("rust::Slice<const uint8_t>({n}.data(),{n}.size())")
-                        } else {
-                            n.clone()
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let call = format!("::ethersync::{name}({callargs})");
-                if fallible {
-                    let outcome = format!("Outcome{}", suffix(&ret));
-                    bodies += &format!(
-                        "auto result={call}; if(!::ethersync::{outcome}_ok(*result)) return {rt}::failure(std::string(::ethersync::{outcome}_error(*result)));\n"
-                    );
-                    if ret != "()" {
-                        bodies += &format!("auto value=::ethersync::{outcome}_take(*result);\n");
-                    }
-                } else if ret == "()" {
-                    bodies += &format!("{call};\n");
-                } else {
-                    bodies += &format!("auto value={call};\n");
-                }
-                if ret != "()" {
-                    let converted = if opaque.contains(&ret) {
-                        format!("{ret}(std::move(value))")
-                    } else if ret == "String" {
-                        "std::string(value)".into()
-                    } else if ret == "Vec<u8>" {
-                        "std::vector<uint8_t>(value.begin(),value.end())".into()
-                    } else {
-                        "value".into()
-                    };
-                    bodies += &format!(
-                        "return {};\n",
-                        if fallible {
-                            format!("{rt}({converted})")
-                        } else {
-                            converted
-                        }
-                    );
-                } else if fallible {
-                    bodies += "return Result<void>();\n";
-                }
-                bodies += "}\n";
-            }
-            s += "};\n";
-        }
-        s += &bodies;
-        s += "}\n";
-        fs::write(dir.join("ethersync-client.hpp"), s).unwrap();
+        super::cpp::generate(dir, opaque, records, functions);
     }
     if std::env::var_os("CARGO_FEATURE_C").is_some() {
         let mut s = String::from(

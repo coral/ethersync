@@ -1,6 +1,6 @@
 //! Native leader + HTTP/3 byte transport for the Node/WASM accuracy investigation.
 //! The independent CAL/SAMPLE pipe never feeds the follower's clock estimator.
-use ethersync::{Engine, LeaderConfig, Position, Rate};
+use libethersync::{Engine, LeaderConfig, Position, Rate};
 use std::io::{BufRead, Write};
 use std::time::Duration;
 fn hex(bytes: &[u8]) -> String {

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Measure native leader sampling cadence through a PTY, excluding screen/compositor latency.
-Run `cargo build -p ethersync --example leader` first. Uses only Python's standard library.
+Run `cargo build -p libethersync --example leader` first. Uses only Python's standard library.
 """
 import fcntl
 import json

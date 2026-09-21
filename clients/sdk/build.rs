@@ -9,6 +9,12 @@ fn copy_tree(from: &Path, to: &Path) {
     for entry in fs::read_dir(from).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
+        if matches!(
+            entry.file_name().to_str(),
+            Some("target" | "dist" | "bin" | "obj" | ".build" | ".DS_Store")
+        ) {
+            continue;
+        }
         if path.is_dir() {
             copy_tree(&path, &to.join(entry.file_name()));
         } else {
@@ -34,6 +40,7 @@ fn main() {
         apple::package(&artifacts, &destination);
         return;
     }
+    println!("cargo:rerun-if-changed=templates/CMakeLists.txt");
     let artifacts = PathBuf::from(
         env::var_os("ETHERSYNC_SDK_ARTIFACTS")
             .expect("set ETHERSYNC_SDK_ARTIFACTS to the completed Cargo profile directory"),
@@ -72,14 +79,11 @@ fn main() {
     for path in [
         ".cargo",
         "protocol",
-        "lib",
-        "app",
-        "transport",
+        "native",
         "clients/bindings",
         "clients/csharp",
         "clients/wasm",
         "clients/sdk",
-        "examples",
         "Cargo.toml",
         "Cargo.lock",
     ] {
@@ -94,53 +98,12 @@ fn main() {
         sdk.join("README.md"),
     )
     .unwrap();
-    fs::write(sdk.join("CMakeLists.txt"),format!(r#"cmake_minimum_required(VERSION 3.20)
-project(EthersyncSDK LANGUAGES C CXX)
-add_library(ethersync STATIC IMPORTED GLOBAL)
-if(WIN32)
-  set_target_properties(ethersync PROPERTIES IMPORTED_LOCATION "${{CMAKE_CURRENT_LIST_DIR}}/lib/ethersync_bindings.lib")
-  target_link_libraries(ethersync INTERFACE ws2_32 userenv bcrypt ntdll advapi32 crypt32 secur32)
-else()
-  set_target_properties(ethersync PROPERTIES IMPORTED_LOCATION "${{CMAKE_CURRENT_LIST_DIR}}/lib/libethersync_bindings.a")
-  if(APPLE)
-    target_link_libraries(ethersync INTERFACE "-framework Security" "-framework SystemConfiguration" "-framework CoreFoundation" c++)
-  else()
-    target_link_libraries(ethersync INTERFACE pthread dl m stdc++)
-  endif()
-endif()
-set_target_properties(ethersync PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${{CMAKE_CURRENT_LIST_DIR}}/include")
-add_executable(ethersync-c examples/smoke.c)
-target_link_libraries(ethersync-c PRIVATE ethersync)
-add_executable(ethersync-cpp examples/smoke.cpp)
-target_link_libraries(ethersync-cpp PRIVATE ethersync)
-target_compile_features(ethersync-cpp PRIVATE cxx_std_17)
-if(MSVC)
-  target_compile_options(ethersync-cpp PRIVATE /EHs-c-)
-else()
-  target_compile_options(ethersync-cpp PRIVATE -fno-exceptions)
-endif()
-{}
-enable_testing()
-add_test(NAME c COMMAND ethersync-c)
-add_test(NAME cpp COMMAND ethersync-cpp)
-add_executable(ethersync-client-c examples/client.c)
-add_executable(ethersync-client-cpp examples/client.cpp)
-target_link_libraries(ethersync-client-c PRIVATE ethersync)
-target_link_libraries(ethersync-client-cpp PRIVATE ethersync)
-target_compile_features(ethersync-client-cpp PRIVATE cxx_std_17)
-get_target_property(SMOKE_DEFINITIONS ethersync-c COMPILE_DEFINITIONS)
-if(SMOKE_DEFINITIONS)
-  target_compile_definitions(ethersync-client-c PRIVATE ${{SMOKE_DEFINITIONS}})
-  target_compile_definitions(ethersync-client-cpp PRIVATE ${{SMOKE_DEFINITIONS}})
-endif()
-if(MSVC)
-  target_compile_options(ethersync-client-cpp PRIVATE /EHs-c-)
-else()
-  target_compile_options(ethersync-client-cpp PRIVATE -fno-exceptions)
-endif()
-add_test(NAME client-c COMMAND ethersync-client-c)
-add_test(NAME client-cpp COMMAND ethersync-client-cpp)
-"#,if variant=="native"{"target_compile_definitions(ethersync-c PRIVATE ETHERSYNC_NATIVE)\ntarget_compile_definitions(ethersync-cpp PRIVATE ETHERSYNC_NATIVE)"}else{""})).unwrap();
+    fs::write(
+        sdk.join("CMakeLists.txt"),
+        include_str!("templates/CMakeLists.txt")
+            .replace("@NATIVE@", if variant == "native" { "ON" } else { "OFF" }),
+    )
+    .unwrap();
     if target.contains("apple-darwin") && sdk.join("include/Ethersync.swift").exists() {
         let headers = sdk.join("swift-c");
         fs::create_dir_all(&headers).unwrap();
@@ -256,9 +219,7 @@ let package = Package(name: "Ethersync", platforms: [.macOS(.v13)], products: [.
     for member in [
         ".cargo",
         "protocol",
-        "lib",
-        "app",
-        "transport",
+        "native",
         "clients/bindings",
         "clients/wasm",
         "clients/sdk",
@@ -277,12 +238,11 @@ let package = Package(name: "Ethersync", platforms: [.macOS(.v13)], products: [.
     }
     fs::copy(repo.join("Cargo.lock"), source.join("Cargo.lock")).unwrap();
     fs::copy(repo.join("Cargo.toml"), source.join("Cargo.toml")).unwrap();
-    // lib registers examples outside its directory.
-    copy_tree(&repo.join("examples"), &source.join("examples"));
     for name in ["LICENSE", "LICENSE-MIT", "LICENSE-APACHE"] {
         let path = repo.join(name);
         if path.exists() {
-            fs::copy(path, source.join(name)).unwrap();
+            fs::copy(&path, source.join(name)).unwrap();
+            fs::copy(&path, sdk.join(name)).unwrap();
         }
     }
     fs::write(

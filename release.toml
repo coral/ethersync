@@ -1,0 +1,15 @@
+# Install the tested tool: cargo install cargo-release --version 1.1.6 --locked
+allow-branch = ["master"]
+shared-version = true
+consolidate-commits = true
+pre-release-commit-message = "Release {{version}}"
+tag-name = "v{{version}}"
+tag-message = "Ethersync {{version}}"
+tag = true
+push = true
+push-remote = "origin"
+# Publication is deliberately gated until the required MoQ APIs reach crates.io.
+# See docs/releasing.md before enabling. SDK tag releases work independently.
+publish = false
+verify = true
+dependent-version = "upgrade"

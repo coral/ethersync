@@ -19,13 +19,10 @@ The Rust workspace uses edition 2024 and Cargo resolver 3.
 - `protocol/` (`ethersync-protocol`): protobuf schema, wire validation, exact
   timecode arithmetic, clock estimation, timelines, tracking, and shared timing
   APIs. Both native and WASM clients use this core.
-- `transport/` (`ethersync-transport`): explicitly driven QUIC, WebTransport,
-  MoQ, and TLS support. Transport progress belongs to the caller; the transport
-  does not own an executor or background threads.
-- `lib/` (`ethersync`): public native API, engine worker, discovery, networking,
-  leaders, followers, and readers.
-- `app/`: application crate. Runnable leader/follower/tracked examples are in
-  the root `examples/` directory and belong to the `ethersync` package.
+- `native/` (`libethersync`): public native API, engine worker, discovery,
+  networking, leaders, followers, and readers. Its internal `src/transport/`
+  module drives QUIC/WebTransport/MoQ explicitly without an executor.
+- `native/examples/`: leader, follower, and tracked playback examples.
 - `clients/bindings/`: C, C++, Swift, and C# binding generation and examples.
 - `clients/csharp/`: .NET project and smoke consumer.
 - `clients/sdk/`: native and Apple SDK packaging through Cargo build scripts.
@@ -50,7 +47,7 @@ The Rust workspace uses edition 2024 and Cargo resolver 3.
 - `protocol/proto/ethersync/v1/ethersync.proto` is the schema source. Preserve
   compatibility and golden fixtures unless a protocol change is intentional.
 - `clients/bindings/src/api.rs` defines the foreign API. Update the generators
-  (`build.rs`, `wrappers.rs`, `csharp.rs`) and templates when needed; do not patch
+  (`build.rs`, `wrappers.rs`, `cpp.rs`, `csharp.rs`) and templates when needed; do not patch
   generated bindings as the implementation of a fix.
 - Preserve both native and core-only binding variants and foreign-language
   ownership/error handling. Use separate Cargo target directories for variants.
@@ -72,7 +69,7 @@ The Rust workspace uses edition 2024 and Cargo resolver 3.
 - Match the wasm-bindgen CLI to the exact crate version pinned in
   `clients/wasm/Cargo.toml`; `web/scripts/build-wasm.mjs` manages this tool.
 - Project code is licensed `MIT OR Apache-2.0`. Preserve `LICENSE-MIT`,
-  `LICENSE-APACHE`, and third-party notices in `transport/licenses/`. Check new
+  `LICENSE-APACHE`, and third-party notices in `native/licenses/`. Check new
   dependencies' licenses; do not assume the project license replaces theirs.
 
 ## Validation
@@ -92,7 +89,7 @@ cargo test --workspace --locked
 `bash scripts/check.sh` is the broader validation entry point. It also checks
 Rustdoc, Buf lint/format/build, generated schema documentation, and example
 smoke tests. It requires Buf and protoc-gen-doc in addition to Rust and Python.
-It regenerates `docs/messages.md` and verifies that it was already up to date.
+It generates schema documentation in temporary output and checks `docs/messages.md`.
 
 For web or WASM changes, run the relevant checks:
 
@@ -114,10 +111,23 @@ uses `scripts/build-apple-sdk.sh`; keep deployment targets consistent with
 The ignored mDNS integration test requires a multicast-capable interface:
 
 ```sh
-cargo test -p ethersync --locked --test mdns -- --ignored --nocapture
+cargo test -p libethersync --locked --test mdns -- --ignored --nocapture
 ```
 
 Report multicast/network failures separately from direct QUIC results. See
 `docs/validation.md` for measurement requirements and multi-machine procedures.
 Before finishing, run `git diff --check` and inspect the diff to ensure protected
 README files and unrelated user changes were not altered by your work.
+
+## Releases and SDK checks
+
+- Read `docs/releasing.md` before changing packaging or release workflows.
+- The Rust package and import are `libethersync`; foreign library filenames
+  remain `ethersync_bindings`. C, C++, and C# share its exported C ABI.
+- Only `ethersync-protocol` and `libethersync` may be published to crates.io.
+  Registry publishing is gated off in `release.toml` pending upstream MoQ.
+- Use `scripts/sdk.py` to build and test archived native/core SDKs. Consumer
+  checks must exercise optimized shared libraries as well as static libraries.
+- Release smoke checks must execute even with NDEBUG defined. Never put calls
+  needed for test execution exclusively inside C/C++ assert expressions.
+- Do not publish a release with missing target/variant artifacts or failed tests.

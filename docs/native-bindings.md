@@ -5,8 +5,8 @@ follower correction policy, tracking, and boundary prediction. It has no runtime
 networking, or threads. The existing WASM client and the new core-only native
 bindings both use it directly.
 
-`transport` owns nonblocking UDP, Quinn's protocol state, TLS, and the
-HTTP/3/WebTransport framing. `lib/src/worker.rs` is a single `mio::Poll` loop per
+The internal `native/src/transport` module owns nonblocking UDP, Quinn's protocol state, TLS, and the
+HTTP/3/WebTransport framing. `native/src/worker.rs` is a single `mio::Poll` loop per
 engine. It receives bounded synchronous commands and wakes for socket readiness,
 commands, protocol notifications, and the earliest actual deadline. It does not
 start Tokio, run a general future executor, or create a CPU-sized worker pool.
@@ -37,7 +37,7 @@ Published Tokio-based MoQ libraries are dev dependencies used as independent
 interoperability peers. Verify the distinction with:
 
 ```sh
-cargo tree -p ethersync -e normal -i tokio
+cargo tree -p libethersync -e normal -i tokio
 cargo tree -p ethersync-bindings --no-default-features --features c,cpp,swift -e normal
 ```
 
@@ -48,8 +48,8 @@ The second tree contains no Tokio, MoQ, QUIC, TLS, or discovery dependencies.
 [The binding guide](../clients/bindings/README.md) documents builds, ownership,
 errors, units, and packaging. `clients/bindings/src/api.rs` is the authoritative
 foreign surface. The Rust build script parses supported functions and POD
-records with `syn`, generates per-language adapters, and invokes cbindgen, cxx,
-and swift-bridge. Unsupported signatures fail the build. No Python/Node is needed.
+records with `syn`, generates per-language adapters and C++ wrappers, and invokes
+cbindgen, csbindgen, and swift-bridge. Unsupported signatures fail the build. No Python/Node is needed.
 The adapter intentionally exposes flat functions and opaque owned handles rather
 than duplicating the native Rust implementation in each language.
 
@@ -115,8 +115,8 @@ and `engine_worker_timing`.
 Reproduce the load test with:
 
 ```sh
-cargo test -p ethersync --test poll_worker -- --nocapture
-cargo test -p ethersync --test poll_worker probe_deadline_tails_with_discovery -- --ignored --nocapture
+cargo test -p libethersync --test poll_worker -- --nocapture
+cargo test -p libethersync --test poll_worker probe_deadline_tails_with_discovery -- --ignored --nocapture
 ```
 
 The first review run with 15 followers, 100 Hz control changes, and periodic
@@ -125,3 +125,18 @@ maximum 3.111 ms. The longest worker pass was 20.365 ms, including startup and
 handshakes. This is a measured sample, not a hard scheduling bound. Bounded network
 operation counts do not bound cryptographic work or OS scheduling latency. The
 load test's 500 ms guard detects starvation, not compliance with a real-time SLA.
+
+
+## Shared-library SDKs
+
+C and C++ use the same exported C ABI as C#. The generated C++ convenience
+header is `ethersync-client.hpp`, in namespace `ethersync::client`; it owns C
+handles with move-only RAII and exposes explicit `Result<T>` errors. It does not
+require CXX or a C++ runtime ABI across the library boundary. Qualify wrapper
+classes with that namespace to distinguish them from the opaque C handle types.
+The old CXX-specific `ethersync.hpp` API has been removed.
+
+Packaged CMake targets are `Ethersync::shared` and `Ethersync::static`; the
+`ethersync` alias selects shared linking. `ETHERSYNC_BUILD_EXAMPLES=OFF` disables
+packaged consumer tests when integrating the SDK with `add_subdirectory`.
+See [releasing](releasing.md) for the platform matrix and archive validation.

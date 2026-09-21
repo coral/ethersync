@@ -5,10 +5,6 @@ pub mod api;
 mod c {
     include!(concat!(env!("OUT_DIR"), "/c.rs"));
 }
-#[cfg(feature = "cpp")]
-mod cpp {
-    include!(concat!(env!("OUT_DIR"), "/cpp.rs"));
-}
 #[cfg(feature = "swift")]
 // swift-bridge 0.1.59 emits redundant casts in opaque Result conversions.
 #[allow(clippy::unnecessary_cast)]

@@ -1,0 +1,42 @@
+name: EthersyncSmoke
+options:
+  deploymentTarget:
+    iOS: "26.0"
+packages:
+  Ethersync:
+    path: SDK
+settings:
+  base:
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: YES
+    CODE_SIGNING_ALLOWED: NO
+    SWIFT_VERSION: "5.0"
+    GENERATE_INFOPLIST_FILE: YES
+    PRODUCT_BUNDLE_IDENTIFIER: se.ethersync.smoke
+targets:
+  EthersyncSmoke:
+    type: application
+    platform: iOS
+    sources: [App.swift]
+    settings:
+      base:
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+  EthersyncSmokeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [SmokeTests.swift]
+    dependencies:
+      - target: EthersyncSmoke
+      - package: Ethersync
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: se.ethersync.smoke.tests
+schemes:
+  EthersyncSmoke:
+    build:
+      targets:
+        EthersyncSmoke: all
+        EthersyncSmokeTests: [test]
+    test:
+      targets: [EthersyncSmokeTests]

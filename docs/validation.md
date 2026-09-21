@@ -2,12 +2,12 @@
 
 ## Reproducible local checks
 
-Run `scripts/check.sh` after installing the pinned schema tools described in the README. It executes formatting, Clippy with warnings denied, workspace tests/doctests, Rustdoc with warnings denied, Buf lint/format/build, protoc-gen-doc generation, and every example. `scripts/smoke_examples.py` starts actual separate leader/follower processes, asserts reverse playback and synchronized status, and runs the tracked example through loss, pause, and reverse.
+Run `scripts/check.sh` after installing the pinned schema tools listed in `.github/workflows/validation.yml`. It executes formatting, Clippy with warnings denied, workspace tests/doctests, Rustdoc with warnings denied, Buf lint/format/build, protoc-gen-doc generation, and every example. `scripts/smoke_examples.py` starts actual separate leader/follower processes, asserts reverse playback and synchronized status, and runs the tracked example through loss, pause, and reverse.
 
 Run the network-dependent discovery test separately:
 
 ```sh
-cargo test -p ethersync --test mdns -- --ignored --nocapture
+cargo test -p libethersync --test mdns -- --ignored --nocapture
 ```
 
 It advertises two equal display names, checks distinct identities and usable endpoint/pin metadata, and observes goodbye removal after leader shutdown. It requires a multicast-capable interface; a failure here must be reported independently from direct QUIC functionality.
@@ -28,7 +28,7 @@ The simulation uses a reproducible linear-congruential random generator. The rep
 ## Two-computer Wi-Fi procedure
 
 1. Build the same checkout and Cargo.lock on two computers. Record hardware, OS, power mode, Rust version, Wi-Fi adapter/driver, AP model, band/channel, and the revision under test. Put both machines on the same LAN with client isolation disabled. Permit UDP 4443 and mDNS UDP 5353 in the host firewalls. Avoid suspend during the run.
-2. On computer A, run `cargo run --release -p ethersync --example leader -- --bind 0.0.0.0:4443 --fps 29.97 --drop-frame --start 107892`. Record its displayed certificate fingerprint and Wi-Fi IP. On B, run the follower with `--address A_WIFI_IP:4443 --pin FINGERPRINT --seconds 600`, saving stdout/stderr. Then repeat using discovery selection without `--address` and check that the same identity is shown.
+2. On computer A, run `cargo run --release -p libethersync --example leader -- --bind 0.0.0.0:4443 --fps 29.97 --drop-frame --start 107892`. Record its displayed certificate fingerprint and Wi-Fi IP. On B, run the follower with `--address A_WIFI_IP:4443 --pin FINGERPRINT --seconds 600`, saving stdout/stderr. Then repeat using discovery selection without `--address` and check that the same identity is shown.
 3. On A, issue `play`, `pause`, `seek 0`, `shuttle -1 1`, `shuttle 1 2`, and `at 1000 1800 0 1`. Confirm B acquires synchronization, changes discontinuities immediately on explicit commands, runs in the correct direction/rate, and reaches the scheduled paused position. Record acquisition time, uncertainty, sample age, offset/drift, RTT, and loss counters. Console labels are display diagnostics, not subframe measurements.
 4. While running at -1x, disconnect A from Wi-Fi for 30 seconds. B must enter holdover and continue in reverse with increasing uncertainty. Reconnect A and observe recovery. Repeat while paused; position must remain fixed. Restart the leader on the same port, exchange its new fingerprint through the trusted channel, and restart B with the new pin. For a separate trusted-LAN recovery test, omit `--pin` and verify that the existing follower reconnects and reinitializes on the new session. Confirm it never switches to another advertised leader.
 5. Run the tracked example on A for ten seconds and observe B's `Tracked/Healthy` → `Tracked/Degraded` → `Tracked/Healthy` transitions during the 3–5 second input gap. Timecode continues through the gap; later pause/reverse changes should appear immediately.
@@ -56,7 +56,7 @@ libraries. It builds for `wasm32-unknown-unknown`. The web pnpm tests execute th
 Node, covering protocol fixtures, malformed/version/size rejection, signed extrapolation, controls,
 scheduled pause, stale revisions/sessions, source health, reconnect, and indefinite holdover.
 
-`lib/tests/webtransport.rs` exercises a real HTTP/3 connection to the native leader on its existing
+`native/tests/webtransport.rs` exercises a real HTTP/3 connection to the native leader on its existing
 UDP listener, validating state, private request/reply datagrams, and correct/incorrect pin behavior.
 This is a Rust HTTP/3 client test, not a browser test. See [the browser test procedure](../web/README.md).
 No browser was available through the browser automation runtime during this implementation; live
@@ -241,3 +241,28 @@ and cross-process example smoke tests pass. Frame-change sampling lateness remai
 1.1 ms p95. These checks validate the emitted output and sampling behavior; they do not establish
 that the missing redraw transaction caused the full observed visual gap. Live Ghostty inspection
 through Computer Use was blocked by that tool's app safety policy.
+
+
+## Release pipeline validation, 2026-09-21
+
+After moving the native crate to `native/` and renaming it `libethersync`, local
+workspace tests, strict Clippy, Rustdoc, schema checks, the protocol package build,
+all example smokes, and all 11 compiled-WASM/web tests passed. README files were
+checked against their original hashes and remain unchanged.
+
+Optimized macOS ARM64 native/core archives passed C and C++ static/shared consumer
+tests, SwiftPM and Swift dylib consumer tests, dynamic-link inspection, and a
+build of their extracted Rust sources. An Ubuntu 22.04 ARM64 container passed the
+Rust workspace suite and all 16 native/core static/shared C/C++ consumer tests.
+The aggregate Apple SDK built both macOS architectures, iOS ARM64, and the ARM64
+simulator slice; an app using the extracted package passed its XCTest loopback
+synchronization test on the locally installed iOS 27 simulator. CI targets iOS 26.
+
+A disposable Git repository verified that pinned cargo-release creates one shared
+version bump, updates the native protocol dependency, and makes exactly one
+version tag, with publication and pushes disabled. Six release-script tests cover
+incomplete assets, wrong architectures, debug builds, unsafe archive paths,
+checksums, and preservation of already published releases. Workflow syntax was
+checked with actionlint. Windows consumers and the remaining desktop architecture
+combinations still require their GitHub matrix runs; local checks do not claim
+those have passed. Registry publishing remains gated on the upstream MoQ release.

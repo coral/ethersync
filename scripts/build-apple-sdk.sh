@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build the native Swift SDK for Apple Silicon Mac, iPhone/iPad, and arm64 Simulator.
+# Build the native Swift SDK for Apple Silicon and Intel Mac, iPhone/iPad, and arm64 Simulator.
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo"
@@ -11,9 +11,9 @@ output="$(cd "$output" && pwd)"
 artifacts="$(cd "$artifacts" && pwd)"
 profile="${ETHERSYNC_BUILD_PROFILE:-release}"
 case "$profile" in debug) flags=();; release) flags=(--release);; *) echo 'Use debug or release for ETHERSYNC_BUILD_PROFILE' >&2; exit 1;; esac
-for target in aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim; do
+for target in aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim; do
     case "$target" in
-        aarch64-apple-darwin) sdk=macosx;;
+        *-apple-darwin) sdk=macosx;;
         aarch64-apple-ios) sdk=iphoneos;;
         *) sdk=iphonesimulator;;
     esac
@@ -21,6 +21,6 @@ for target in aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim; do
         cargo build -p ethersync-bindings --locked --target "$target" --target-dir "$artifacts" "${flags[@]}"
 done
 ETHERSYNC_SDK_OUT="$output" \
-ETHERSYNC_SDK_APPLE_ARTIFACTS="$artifacts/aarch64-apple-darwin/$profile:$artifacts/aarch64-apple-ios/$profile:$artifacts/aarch64-apple-ios-sim/$profile" \
+ETHERSYNC_SDK_APPLE_ARTIFACTS="$artifacts/aarch64-apple-darwin/$profile:$artifacts/x86_64-apple-darwin/$profile:$artifacts/aarch64-apple-ios/$profile:$artifacts/aarch64-apple-ios-sim/$profile" \
     cargo build -p ethersync-sdk --locked --target-dir "$artifacts"
 printf 'Apple Swift package: %s/Ethersync\n' "$output"

@@ -6,7 +6,7 @@ import tempfile
 import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-subprocess.run(["cargo", "build", "-p", "ethersync", "--examples", "--locked"], cwd=ROOT, check=True)
+subprocess.run(["cargo", "build", "-p", "libethersync", "--examples", "--locked"], cwd=ROOT, check=True)
 BIN = ROOT / "target" / "debug" / "examples"
 with tempfile.TemporaryFile(mode="w+") as log:
     leader = subprocess.Popen([str(BIN / "leader"), "--bind", "127.0.0.1:0", "--no-mdns", "--seconds", "4"], stdin=subprocess.PIPE, stdout=log, stderr=subprocess.STDOUT, text=True)

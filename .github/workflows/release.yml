@@ -1,0 +1,56 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  tag:
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.13'
+      - id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python scripts/check_release.py --tag "$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+  validation:
+    needs: tag
+    uses: ./.github/workflows/validation.yml
+  sdk:
+    needs: tag
+    uses: ./.github/workflows/native.yml
+  publish:
+    needs: [tag, validation, sdk]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: sdk-*
+          path: dist/releases
+          merge-multiple: true
+      - name: Verify assets and publish completed release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.tag.outputs.tag }}
+        run: python scripts/publish_release.py "$RELEASE_TAG" dist/releases
