@@ -8,7 +8,7 @@ tag-message = "Ethersync {{version}}"
 tag = true
 push = true
 push-remote = "origin"
-# Publication is deliberately gated until the required MoQ APIs reach crates.io.
+# Publication remains gated pending release validation and packaging checks.
 # See docs/releasing.md before enabling. SDK tag releases work independently.
 publish = false
 verify = true

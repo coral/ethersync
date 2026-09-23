@@ -25,7 +25,7 @@ use bytes::{Buf, Bytes, BytesMut};
 use web_transport_proto as proto;
 
 use super::{Connection, Error};
-use crate::transport::moq::{self as moq_net, kio};
+use crate::transport::moq::kio;
 use crate::transport::runtime::Timers;
 use std::time::Instant;
 
@@ -331,7 +331,8 @@ impl Request {
         // The guard stays armed across the wait below. Cancelling this future
         // mid-grace would otherwise skip the deliberate close and leak the
         // connection, which is the very thing the guard is here to prevent.
-        let mut deadline = moq_net::runtime::Deadline::after(&self.handle.timers, CLOSE_GRACE);
+        let mut deadline = self.handle.timers.timer();
+        deadline.set(Instant::now().checked_add(CLOSE_GRACE));
         let send = &mut self.send;
         kio::wait(|waiter| {
             let mut cx = Context::from_waker(waiter.waker());

@@ -30,14 +30,13 @@ fn stamp(clock: MonotonicClock) -> moq::Timestamp {
     moq::Timestamp::from_nanos(clock.now_ns()).unwrap()
 }
 type Pending<T> = Pin<Box<dyn Future<Output = Result<T>>>>;
-fn origin(runtime: &Runtime) -> (moq::origin::Producer, moq::origin::Run) {
+fn origin() -> (moq::origin::Producer, moq::origin::Driver) {
     let id = (uuid::Uuid::new_v4().as_u128() as u64) & ((1_u64 << 62) - 1);
     let mut config = moq::origin::Config::new(moq::Hop::new(id.max(1)).unwrap());
     config.cache_duration = Duration::from_secs(2);
     config.pool =
         moq::cache::Pool::new(moq::cache::Config::default().with_capacity(256 * 1024_u64));
-    let (origin, driver) = moq::origin::Producer::new(config);
-    (origin, driver.run(runtime.timers()))
+    moq::origin::Producer::new(config)
 }
 async fn subscribe(origin: moq::origin::Producer, name: &str) -> Result<moq::track::Subscriber> {
     let b = origin
@@ -79,6 +78,7 @@ impl Io {
     fn deadline(&self) -> Option<Instant> {
         [
             self.endpoint.next_deadline(),
+            self.runtime.deadline(),
             self.runtime.timers().advance(Instant::now()),
             self.web.next_deadline(),
         ]
@@ -100,7 +100,7 @@ struct Peer {
     session: Option<moq::Session>,
     publish: moq::origin::Producer,
     ingest: moq::origin::Producer,
-    drivers: [moq::origin::Run; 2],
+    drivers: [moq::origin::Driver; 2],
     _broadcast: moq::broadcast::Producer,
     state: Option<moq::track::Producer>,
     datagrams: moq::track::Producer,
@@ -110,18 +110,18 @@ struct Peer {
     deadline: Instant,
     park: moq::kio::Park,
     driver_park: moq::kio::Park,
+    driver_deadline: Option<Instant>,
 }
 impl Peer {
     fn new(
         tls: PendingConnection,
-        io: &Io,
         leader: bool,
         timeout: Duration,
         clock: MonotonicClock,
         state: Option<&[u8]>,
     ) -> Result<Self> {
-        let (publish, a) = origin(&io.runtime);
-        let (ingest, b) = origin(&io.runtime);
+        let (publish, a) = origin();
+        let (ingest, b) = origin();
         let broadcast = publish
             .create_broadcast("ethersync/v1")
             .map_err(transport)?;
@@ -161,12 +161,16 @@ impl Peer {
             deadline: Instant::now() + timeout,
             park: Default::default(),
             driver_park: Default::default(),
+            driver_deadline: None,
         })
     }
     fn step(&mut self, io: &Io, cx: &mut Context<'_>) -> Result<bool> {
         let waiter = self.driver_park.hold(cx);
+        self.driver_deadline = None;
+        let now = Instant::now();
         for driver in &mut self.drivers {
-            let _ = driver.poll(waiter);
+            let at = driver.poll(now, waiter).map_err(transport)?;
+            self.driver_deadline = self.driver_deadline.into_iter().chain(at).min();
         }
         if self.incoming.is_empty() && Instant::now() >= self.deadline {
             return Err(transport("connection/subscription timeout"));
@@ -201,12 +205,12 @@ impl Peer {
                 } else {
                     web::Session::raw(connection)
                 };
-                if leader {
+                let (session, driver) = if leader {
                     moq::Server::new()
                         .with_versions(vec![version()].into())
                         .with_publisher(&publish)
                         .with_subscriber(ingest)
-                        .accept_lite(runtime, session)
+                        .accept_lite(Instant::now(), session)
                         .await
                         .map_err(transport)
                 } else {
@@ -214,10 +218,12 @@ impl Peer {
                         .with_versions(vec![version()].into())
                         .with_publisher(&publish)
                         .with_subscriber(ingest)
-                        .connect_lite(runtime, session)
+                        .connect_lite(Instant::now(), session)
                         .await
                         .map_err(transport)
-                }
+                }?;
+                runtime.spawn(driver);
+                Ok(session)
             }));
         }
         if let Some(future) = &mut self.handshake
@@ -449,7 +455,6 @@ impl LeaderJob {
         while let Some(connection) = self.io.endpoint.accept() {
             match Peer::new(
                 connection,
-                &self.io,
                 true,
                 self.config.timing.connect_timeout,
                 self.clock,
@@ -538,6 +543,7 @@ impl Job for LeaderJob {
         for deadline in [
             self.io.deadline(),
             self.source_deadline,
+            self.peers.iter().filter_map(|p| p.driver_deadline).min(),
             self.peers
                 .iter()
                 .filter(|p| p.incoming.is_empty())
@@ -684,7 +690,6 @@ impl FollowerJob {
                 .map_err(transport)?;
             self.peer = Some(Peer::new(
                 pending,
-                &self.io,
                 false,
                 self.config.timing.connect_timeout,
                 self.clock,
@@ -826,7 +831,12 @@ impl Job for FollowerJob {
         true
     }
     fn deadline(&self) -> Option<Instant> {
-        let mut deadline = self.io.deadline();
+        let mut deadline = self
+            .io
+            .deadline()
+            .into_iter()
+            .chain(self.peer.as_ref().and_then(|p| p.driver_deadline))
+            .min();
         let connection = if let Some(peer) = &self.peer {
             if self.connected {
                 self.next_probe

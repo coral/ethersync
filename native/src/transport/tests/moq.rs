@@ -31,9 +31,9 @@ fn moq_lite_handshake_and_track_without_executor() {
         }
     };
     let runtime = Runtime::default();
-    let (source, source_driver) =
+    let (source, mut source_driver) =
         moq::origin::Producer::new(moq::origin::Config::new(moq::Hop::new(1).unwrap()));
-    let (sink, sink_driver) =
+    let (sink, mut sink_driver) =
         moq::origin::Producer::new(moq::origin::Config::new(moq::Hop::new(2).unwrap()));
     let broadcast = source.create_broadcast("ethersync/v1").unwrap();
     let mut track = broadcast.create_track("state", None).unwrap();
@@ -44,14 +44,12 @@ fn moq_lite_handshake_and_track_without_executor() {
         )
         .unwrap();
     broadcast.announce(moq::origin::Route::default()).unwrap();
-    let mut source_driver = source_driver.run(runtime.timers());
-    let mut sink_driver = sink_driver.run(runtime.timers());
     let client_builder = moq::Client::new().with_subscriber(sink.clone());
     let server_builder = moq::Server::new().with_publisher(&source);
     let mut client_handshake =
-        pin!(client_builder.connect_lite(runtime.clone(), crate::transport::web::Session::raw(a)));
+        pin!(client_builder.connect_lite(Instant::now(), crate::transport::web::Session::raw(a)));
     let mut server_handshake =
-        pin!(server_builder.accept_lite(runtime.clone(), crate::transport::web::Session::raw(b)));
+        pin!(server_builder.accept_lite(Instant::now(), crate::transport::web::Session::raw(b)));
     let mut client_session = None;
     let mut server_session = None;
     let receive = async {
@@ -81,17 +79,21 @@ fn moq_lite_handshake_and_track_without_executor() {
         if client_session.is_none()
             && let Poll::Ready(r) = client_handshake.as_mut().poll(&mut cx)
         {
-            client_session = Some(r.unwrap());
+            let (session, driver) = r.unwrap();
+            runtime.spawn(driver);
+            client_session = Some(session);
         }
         if server_session.is_none()
             && let Poll::Ready(r) = server_handshake.as_mut().poll(&mut cx)
         {
-            server_session = Some(r.unwrap());
+            let (session, driver) = r.unwrap();
+            runtime.spawn(driver);
+            server_session = Some(session);
         }
         runtime.step(&mut cx, &mut park);
         let waiter = park.hold(&cx);
-        let _ = source_driver.poll(waiter);
-        let _ = sink_driver.poll(waiter);
+        let _ = source_driver.poll(Instant::now(), waiter);
+        let _ = sink_driver.poll(Instant::now(), waiter);
         if let Poll::Ready(bytes) = receive.as_mut().poll(&mut cx) {
             assert_eq!(&bytes[..], b"snapshot");
             break;

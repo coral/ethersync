@@ -29,24 +29,23 @@ publication, tag creation, or Git push. Do not execute a release merely to test
 the setup.
 
 **Registry publication is currently disabled in `release.toml`.** Version bumps
-and GitHub SDK releases still work. The current MoQ Git pin contains runtime
-APIs absent from its published crate, so `libethersync` is not yet publishable.
-Do not add a misleading registry fallback for the older same-numbered version.
+and GitHub SDK releases still work. The runtime dependency now uses the published
+`moq-net 0.3.0` crate through the `moq-core` alias. Complete the validation and
+packaging checks below before enabling registry publication.
 
-To enable registry publishing after the upstream release:
+To enable registry publishing:
 
-1. Replace `workspace.dependencies.moq-core` with the verified crates.io version
-   that contains the required APIs, retaining the `moq-net` package alias.
-2. Update the lockfile and run the full CI matrix, especially independent MoQ
-   interoperability tests. Preserve `moq-lite-05` negotiation.
-3. Run `python3 scripts/check_release.py --require-publishable` to reject any
+1. Run the full CI matrix with the crates.io dependency and updated lockfile,
+   especially independent MoQ interoperability tests. Preserve `moq-lite-05`
+   negotiation.
+2. Run `python3 scripts/check_release.py --require-publishable` to reject any
    remaining Git-only or unpublished local runtime/build dependencies.
-4. Verify package contents and builds with Cargo packaging/dry runs. The native
+3. Verify package contents and builds with Cargo packaging/dry runs. The native
    crate's protocol dependency must resolve to the matching published version;
    the initial publication therefore publishes protocol first, then native.
    Both packages contain their own license texts, and native contains its examples
    and internal transport source.
-5. Set `publish = true` in `release.toml`, authenticate locally with crates.io,
+4. Set `publish = true` in `release.toml`, authenticate locally with crates.io,
    and preview cargo-release. Only those two packages are publishable; every
    tooling/bindings crate has `publish = false`. cargo-release publishes in
    dependency order before tagging and pushing.

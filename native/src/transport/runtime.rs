@@ -17,8 +17,8 @@ struct TimerState {
 #[derive(Clone, Default)]
 pub struct Timers(Arc<Mutex<Vec<Weak<Mutex<TimerState>>>>>);
 pub struct Timer(Arc<Mutex<TimerState>>);
-impl moq::runtime::Timer for Timer {
-    fn set(&mut self, at: Option<Instant>) {
+impl Timer {
+    pub fn set(&mut self, at: Option<Instant>) {
         let mut s = self.0.lock().unwrap();
         if s.at == at {
             return;
@@ -30,7 +30,7 @@ impl moq::runtime::Timer for Timer {
         // Wakers may reenter: never call them while holding the timer lock.
         waiters.wake();
     }
-    fn poll(&mut self, waiter: &kio::Waiter) -> Poll<()> {
+    pub fn poll(&mut self, waiter: &kio::Waiter) -> Poll<()> {
         let mut s = self.0.lock().unwrap();
         if s.at.is_some_and(|at| at <= Instant::now()) {
             Poll::Ready(())
@@ -40,9 +40,8 @@ impl moq::runtime::Timer for Timer {
         }
     }
 }
-impl moq::Timers for Timers {
-    type Timer = Timer;
-    fn timer(&self) -> Timer {
+impl Timers {
+    pub fn timer(&self) -> Timer {
         let s = Arc::new(Mutex::new(TimerState::default()));
         self.0.lock().unwrap().push(Arc::downgrade(&s));
         Timer(s)
@@ -76,22 +75,17 @@ impl Timers {
 pub struct Runtime {
     timers: Timers,
     ready: Rc<Cell<bool>>,
-    machines: Rc<RefCell<Vec<moq::runtime::Machine<Self>>>>,
-}
-impl moq::Timers for Runtime {
-    type Timer = Timer;
-    fn timer(&self) -> Timer {
-        moq::Timers::timer(&self.timers)
-    }
-}
-impl moq::Runtime for Runtime {
-    type Transport = Session;
-    fn spawn(&self, machine: moq::runtime::Machine<Self>) {
-        self.machines.borrow_mut().push(machine);
-        self.ready.set(true);
-    }
+    deadline: Rc<Cell<Option<Instant>>>,
+    machines: Rc<RefCell<Vec<moq::Driver<Session>>>>,
 }
 impl Runtime {
+    pub fn spawn(&self, driver: moq::Driver<Session>) {
+        self.machines.borrow_mut().push(driver);
+        self.ready.set(true);
+    }
+    pub fn deadline(&self) -> Option<Instant> {
+        self.deadline.get()
+    }
     pub fn needs_pass(&self) -> bool {
         self.ready.get()
     }
@@ -102,7 +96,16 @@ impl Runtime {
         self.ready.set(false);
         let mut machines = std::mem::take(&mut *self.machines.borrow_mut());
         let waiter = park.hold(cx);
-        machines.retain_mut(|m| m.poll(waiter).is_pending());
+        let now = Instant::now();
+        let mut deadline = None;
+        machines.retain_mut(|m| match m.poll(now, waiter) {
+            Ok(at) => {
+                deadline = deadline.into_iter().chain(at).min();
+                true
+            }
+            Err(_) => false,
+        });
+        self.deadline.set(deadline);
         let mut pending = self.machines.borrow_mut();
         machines.append(&mut *pending);
         *pending = machines;
@@ -115,7 +118,6 @@ impl Runtime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use moq::{Timers as _, runtime::Timer as _};
     use std::{
         sync::atomic::{AtomicUsize, Ordering},
         task::{Wake, Waker},

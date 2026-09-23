@@ -21,14 +21,12 @@ Snapshot frames are read incrementally, independently of clock replies. The
 former 5 ms maintenance interval and intermediate network-event channel are gone.
 Explicit controls publish the local reader snapshot before returning their ack.
 
-The upstream MoQ `Runtime` name describes an injected machine/timer provider.
-Our provider stores machines for explicit polling and manages deadlines; it does
-not execute submitted futures. Upstream handshake/subscription helpers remain
-owned, manually polled futures, and MoQ's internal model has pollable lifecycle
-work. This change removes the async *executor*, not every Rust `async` function
-inside dependencies. The inspected Git revision is pinned to
-`5d0991b9991305be907e6c0682a4e276722eeed0` because its runtime/timer injection API
-is newer than the published package with the same version number.
+The published `moq-net 0.3.0` crate, imported through the `moq-core` dependency
+alias, returns session and origin drivers. The owner polls them with the current
+monotonic instant and includes their returned deadlines in its next wake time.
+Completed drivers are dropped. Handshake/subscription helpers remain owned,
+manually polled futures; no async executor is started. The local timer registry
+also drives WebTransport rejection grace periods.
 
 Tokio remains a transitive compiled utility dependency of upstream `web-async`
 and `web-transport-proto` (the latter uses I/O traits). Ethersync does not construct

@@ -10,4 +10,4 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 prost = "0.14.4"
 thiserror = "2.0.20"
-moq-core = { package = "moq-net", git = "https://github.com/moq-dev/moq", rev = "5d0991b9991305be907e6c0682a4e276722eeed0" }
+moq-core = { package = "moq-net", version = "0.3.0" }

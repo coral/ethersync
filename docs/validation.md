@@ -265,4 +265,5 @@ incomplete assets, wrong architectures, debug builds, unsafe archive paths,
 checksums, and preservation of already published releases. Workflow syntax was
 checked with actionlint. Windows consumers and the remaining desktop architecture
 combinations still require their GitHub matrix runs; local checks do not claim
-those have passed. Registry publishing remains gated on the upstream MoQ release.
+those have passed. Registry publishing remains disabled pending the release
+validation and packaging checks in `docs/releasing.md`.

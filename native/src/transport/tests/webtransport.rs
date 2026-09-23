@@ -18,7 +18,7 @@ fn published_client_reads_http3_snapshot_from_polling_server() {
             .unwrap();
         let runtime = Runtime::default();
         let web = web::Driver::new(runtime.timers());
-        let (source, source_driver) = moq::origin::Producer::new(Default::default());
+        let (source, mut origin_driver) = moq::origin::Producer::new(Default::default());
         let broadcast = source.create_broadcast("ethersync/v1").unwrap();
         let mut track = broadcast.create_track("state", None).unwrap();
         track
@@ -28,7 +28,6 @@ fn published_client_reads_http3_snapshot_from_polling_server() {
             )
             .unwrap();
         broadcast.announce(Default::default()).unwrap();
-        let mut origin_driver = source_driver.run(runtime.timers());
         let mut incoming = None;
         let mut handshake = None;
         let mut session = None;
@@ -53,11 +52,13 @@ fn published_client_reads_http3_snapshot_from_polling_server() {
                         .respond(web::Response::default().with_protocol("moq-lite-05"))
                         .await
                         .unwrap();
-                    moq::Server::new()
+                    let (session, driver) = moq::Server::new()
                         .with_publisher(&source)
-                        .accept_lite(runtime, session)
+                        .accept_lite(Instant::now(), session)
                         .await
-                        .unwrap()
+                        .unwrap();
+                    runtime.spawn(driver);
+                    session
                 }));
             }
             if let Some(pending) = handshake.as_mut()
@@ -67,7 +68,7 @@ fn published_client_reads_http3_snapshot_from_polling_server() {
                 handshake = None;
             }
             runtime.step(&mut cx, &mut park);
-            let _ = origin_driver.poll(park.hold(&cx));
+            let _ = origin_driver.poll(Instant::now(), park.hold(&cx));
             web.step(&mut cx, Instant::now());
             std::thread::sleep(Duration::from_micros(100));
         }
