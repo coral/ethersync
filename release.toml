@@ -8,8 +8,7 @@ tag-message = "Tidkod {{version}}"
 tag = true
 push = true
 push-remote = "origin"
-# Publication remains gated pending release validation and packaging checks.
-# See docs/releasing.md before enabling. SDK tag releases work independently.
-publish = false
+# Only tidkod-protocol and tidkod are publishable; client crates opt out.
+publish = true
 verify = true
 dependent-version = "upgrade"

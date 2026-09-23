@@ -125,7 +125,8 @@ README files and unrelated user changes were not altered by your work.
 - The Rust package and import are `tidkod`; foreign library filenames
   remain `tidkod_bindings`. C, C++, and C# share its exported C ABI.
 - Only `tidkod-protocol` and `tidkod` may be published to crates.io.
-  Registry publishing is gated off in `release.toml` pending upstream MoQ.
+  Registry publishing is enabled in `release.toml`; client/tooling crates remain
+  unpublished.
 - Use `scripts/sdk.py` to build and test archived native/core SDKs. Consumer
   checks must exercise optimized shared libraries as well as static libraries.
 - Release smoke checks must execute even with NDEBUG defined. Never put calls

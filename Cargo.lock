@@ -726,48 +726,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tidkod-bindings"
-version = "0.1.0"
-dependencies = [
- "cbindgen",
- "csbindgen",
- "tidkod-protocol",
- "tidkod",
- "quote",
- "swift-bridge",
- "swift-bridge-build",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "tidkod-protocol"
-version = "0.1.0"
-dependencies = [
- "prost",
- "prost-build",
- "protox",
- "thiserror",
-]
-
-[[package]]
-name = "tidkod-sdk"
-version = "0.1.0"
-
-[[package]]
-name = "tidkod-wasm"
-version = "0.1.0"
-dependencies = [
- "tidkod-protocol",
- "tidkod",
- "moq-native",
- "moq-net 0.2.22",
- "serde",
- "serde-wasm-bindgen",
- "tokio",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "fastbloom"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1545,37 +1503,6 @@ name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
-
-[[package]]
-name = "tidkod"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "chrono",
- "crossterm",
- "tidkod-protocol",
- "http",
- "if-addrs",
- "mdns-sd",
- "mio",
- "moq-native",
- "moq-net 0.2.22",
- "moq-net 0.3.0",
- "quinn-proto",
- "quinn-udp",
- "rcgen",
- "rustls",
- "sha2",
- "thiserror",
- "time",
- "tokio",
- "tracing",
- "triple_buffer",
- "url",
- "uuid",
- "web-transport-proto",
- "web-transport-trait",
-]
 
 [[package]]
 name = "libm"
@@ -3102,6 +3029,79 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ad99c4c6d32803332c548b1af0540b357b3f5fc0be8f6c6bfe8b2e6ae784070"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "tidkod"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "chrono",
+ "crossterm",
+ "http",
+ "if-addrs",
+ "mdns-sd",
+ "mio",
+ "moq-native",
+ "moq-net 0.2.22",
+ "moq-net 0.3.0",
+ "quinn-proto",
+ "quinn-udp",
+ "rcgen",
+ "rustls",
+ "sha2",
+ "thiserror",
+ "tidkod-protocol",
+ "time",
+ "tokio",
+ "tracing",
+ "triple_buffer",
+ "url",
+ "uuid",
+ "web-transport-proto",
+ "web-transport-trait",
+]
+
+[[package]]
+name = "tidkod-bindings"
+version = "0.1.0"
+dependencies = [
+ "cbindgen",
+ "csbindgen",
+ "quote",
+ "swift-bridge",
+ "swift-bridge-build",
+ "syn 2.0.119",
+ "tidkod",
+ "tidkod-protocol",
+]
+
+[[package]]
+name = "tidkod-protocol"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "prost-build",
+ "protox",
+ "thiserror",
+]
+
+[[package]]
+name = "tidkod-sdk"
+version = "0.1.0"
+
+[[package]]
+name = "tidkod-wasm"
+version = "0.1.0"
+dependencies = [
+ "moq-native",
+ "moq-net 0.2.22",
+ "serde",
+ "serde-wasm-bindgen",
+ "tidkod",
+ "tidkod-protocol",
+ "tokio",
+ "wasm-bindgen",
 ]
 
 [[package]]

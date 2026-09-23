@@ -28,31 +28,34 @@ pushes them to `origin`. It does not modify README files. A dry run performs no
 publication, tag creation, or Git push. Do not execute a release merely to test
 the setup.
 
-**Registry publication is currently disabled in `release.toml`.** Version bumps
-and GitHub SDK releases still work. The runtime dependency now uses the published
-`moq-net 0.3.0` crate through the `moq-core` alias. Complete the validation and
-packaging checks below before enabling registry publication.
+Registry publication is enabled in `release.toml`. Only `tidkod-protocol` and
+`tidkod` are publishable; every tooling/bindings crate has `publish = false`.
+cargo-release publishes in dependency order before tagging and pushing. The tag
+push then starts the GitHub SDK release workflow.
 
-To enable registry publishing:
+For the initial release of the current version (without a version bump):
 
-1. Run the full CI matrix with the crates.io dependency and updated lockfile,
-   especially independent MoQ interoperability tests. Preserve `moq-lite-05`
-   negotiation.
-2. Run `python3 scripts/check_release.py --require-publishable` to reject any
-   remaining Git-only or unpublished local runtime/build dependencies.
-3. Verify package contents and builds with Cargo packaging/dry runs. The native
-   crate's protocol dependency must resolve to the matching published version;
-   the initial publication therefore publishes protocol first, then native.
-   Both packages contain their own license texts, and native contains its examples
-   and internal transport source.
-4. Set `publish = true` in `release.toml`, authenticate locally with crates.io,
-   and preview cargo-release. Only those two packages are publishable; every
-   tooling/bindings crate has `publish = false`. cargo-release publishes in
-   dependency order before tagging and pushing.
+```sh
+cargo login
+python3 scripts/check_release.py --require-publishable
+cargo release --workspace
+cargo release --workspace --execute
+```
 
-The names were unregistered when this configuration was prepared; availability
-is not a reservation. Registry publication uses the maintainer's local Cargo
-credentials, not a GitHub Actions token.
+Bare `cargo release` is a preview: `--execute` is required to publish and push.
+Commit configuration/source changes first and use a clean, up-to-date `master`.
+Registry publication uses the maintainer's local crates.io credentials, not a
+GitHub Actions token. Use `cargo release patch --workspace --execute` for the
+next patch release, or select another version level as shown above.
+
+Before releasing, run the full CI matrix, including independent MoQ
+interoperability and SDK packaging checks. Preserve `moq-lite-05` negotiation.
+`python3 scripts/check_release.py --require-publishable` rejects Git-only or
+unpublished local runtime/build dependencies. Verify package contents and
+builds with Cargo packaging/dry runs. The initial publication must publish
+`tidkod-protocol` first so the native crate's matching registry dependency can
+resolve. Both packages contain their own license texts, and native contains its
+examples and internal transport source.
 
 ## Platform matrix
 
