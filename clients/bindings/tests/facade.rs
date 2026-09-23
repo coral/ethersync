@@ -78,8 +78,20 @@ fn control_acknowledges_reader_publication_and_children_own_engine() {
     let engine = engine_new().unwrap();
     let mut options = leader_options_new();
     leader_options_advertise(&mut options, false);
+    leader_options_session_id(&mut options, u64::MAX, 0x1234);
     let leader = engine_leader(&engine, &options).unwrap();
     let mut reader = leader_reader(&leader).unwrap();
+    let initial = reader_read(&mut reader);
+    assert!(initial.has_session_id);
+    assert_eq!(
+        (initial.session_id_high, initial.session_id_low),
+        (u64::MAX, 0x1234)
+    );
+    let next = leader_rotate_session_id(&leader).unwrap();
+    let r = reader_read(&mut reader);
+    assert_eq!((r.session_id_high, r.session_id_low), (next.high, next.low));
+    leader_set_session_id(&leader, 0, u64::MAX).unwrap();
+    assert_eq!(reader_read(&mut reader).session_id_low, u64::MAX);
     let endpoints = leader_local_endpoints(&leader).unwrap();
     assert!(endpoint_list_count(&endpoints) > 0);
     assert!(endpoint_list_get(&endpoints, endpoint_list_count(&endpoints)).is_err());
@@ -123,4 +135,33 @@ fn typed_endpoints_validate_and_preserve_ipv6_scope() {
     assert!(follower_options_endpoint(&endpoint_any_ipv4(4443).unwrap()).is_err());
     let mut options = leader_options_new();
     leader_options_bind_endpoint(&mut options, &endpoint_loopback(0).unwrap());
+}
+
+#[test]
+fn core_recording_id_is_exact_optional_and_allocation_free() {
+    let mut core = core_new();
+    assert!(!core_read(&core, 1).has_session_id);
+    core_connected(&mut core);
+    let timeline = tidkod_protocol::timeline::Timeline {
+        session: [1; 16],
+        session_id: Some([0xff; 16]),
+        revision: 1,
+        ..Default::default()
+    };
+    core_state(
+        &mut core,
+        &tidkod_protocol::encode(&timeline.wire()).unwrap(),
+        1,
+    )
+    .unwrap();
+    let frozen = core_snapshot(&core);
+    COUNT.with(|c| c.set(0));
+    ENABLED.with(|c| c.set(true));
+    for now in 1..1000 {
+        let r = timecode_snapshot_read(&frozen, now);
+        assert!(r.has_session_id);
+        assert_eq!((r.session_id_high, r.session_id_low), (u64::MAX, u64::MAX));
+    }
+    ENABLED.with(|c| c.set(false));
+    assert_eq!(COUNT.with(Cell::get), 0);
 }

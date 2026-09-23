@@ -51,6 +51,9 @@ message Snapshot {
   FrameFormat format = 7;
   Anchor anchor = 8;
   repeated ScheduledChange scheduled = 9;
+  // Caller-controlled recording-part UUID, independent of the leader lifetime session.
+  // Empty on older senders; otherwise exactly 16 bytes in UUID/network byte order.
+  bytes session_id = 10;
 }
 // Private unreliable request/reply; response echoes sequence and t1.
 message Probe {

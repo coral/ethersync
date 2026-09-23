@@ -236,6 +236,7 @@ fn serialize_reading(view: View, now: u64, delay: u64, event: &str) -> Result<Js
     #[derive(serde::Serialize)]
     #[serde(rename_all = "camelCase")]
     struct Reading<'a> {
+        session_id: Option<String>,
         label: String,
         frames: f64,
         speed: f64,
@@ -256,6 +257,17 @@ fn serialize_reading(view: View, now: u64, delay: u64, event: &str) -> Result<Js
         event: &'a str,
     }
     serde_wasm_bindgen::to_value(&Reading {
+        session_id: r.session_id.map(|id| {
+            let hex = format!("{:032x}", u128::from_be_bytes(id));
+            format!(
+                "{}-{}-{}-{}-{}",
+                &hex[..8],
+                &hex[8..12],
+                &hex[12..16],
+                &hex[16..20],
+                &hex[20..]
+            )
+        }),
         label: r.label().to_string(),
         frames: r.position.fixed() as f64 / 4294967296.,
         speed: r.rate.as_f64(),

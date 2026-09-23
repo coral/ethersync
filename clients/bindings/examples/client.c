@@ -32,6 +32,7 @@ int main(void) {
     CHECK(!tk_leader_options_bind_endpoint(config.value, endpoint.value).status);
     tk_endpoint_dispose(&endpoint.value);
     CHECK(!tk_leader_options_advertise(config.value, false).status);
+    CHECK(!tk_leader_options_session_id(config.value, 0x1234, 0x5678).status);
     TKResultLeader created_leader = tk_engine_leader(engine, config.value);
     CHECK(!created_leader.status);
     TKLeader leader = created_leader.value;
@@ -39,6 +40,13 @@ int main(void) {
     TKResultReader reader = tk_leader_reader(leader);
     CHECK(!reader.status);
     CHECK(tk_reader_read(reader.value).value.frames == -7);
+    Reading part = tk_reader_read(reader.value).value;
+    CHECK(part.has_session_id && part.session_id_high == 0x1234 && part.session_id_low == 0x5678);
+    TKResultSessionId rotated = tk_leader_rotate_session_id(leader);
+    CHECK(!rotated.status);
+    CHECK(tk_reader_read(reader.value).value.session_id_high == rotated.value.high);
+    CHECK(!tk_leader_set_session_id(leader, 0x8765, 0x4321).status);
+    CHECK(tk_reader_read(reader.value).value.session_id_low == 0x4321);
     CHECK(!tk_reader_snapshot_into(reader.value, captured.value).status);
     TKResultEndpointList endpoints = tk_leader_local_endpoints(leader);
     CHECK(!endpoints.status);

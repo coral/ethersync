@@ -144,6 +144,7 @@ One complete independent state group. Protocol v1 has no delta messages.
 | format | [FrameFormat](#tidkod-v1-FrameFormat) |  |  |
 | anchor | [Anchor](#tidkod-v1-Anchor) |  |  |
 | scheduled | [ScheduledChange](#tidkod-v1-ScheduledChange) | repeated |  |
+| session_id | [bytes](#bytes) |  | Caller-controlled recording-part UUID, independent of the leader lifetime session. Empty on older senders; otherwise exactly 16 bytes in UUID/network byte order. |
 
 
 

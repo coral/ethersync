@@ -234,3 +234,56 @@ bypass the Tidkod mapping and timeline. Comparing them on screen is a control ex
 a similar gap in both system-clock labels exists independently of the synchronization math;
 agreement of system clocks but disagreement in timecode calls for further timeline/clock auditing.
 The test must use the same computer/timezone. It does not assume Ghostty is slow or insert an offset.
+
+## Recording-part session IDs
+
+`Reading::session_id: Option<[u8; 16]>` identifies a caller-defined recording part.
+Record it alongside the timecode to distinguish repeated playback of the same
+frames. It is separate from the internal leader-lifetime `session` used to reject
+stale connections and reset clock acquisition.
+
+Each leader startup generates a fresh UUID v4 unless `LeaderConfig::session_id`
+is supplied. Cloning a default config still generates a different ID for each
+leader. A caller-supplied ID is exactly 16 bytes in UUID/network byte order; all
+bit patterns, including the nil UUID, are accepted.
+
+```rust
+let leader = engine.leader(tidkod::LeaderConfig {
+    session_id: Some([0x12; 16]),
+    ..Default::default()
+})?;
+let next_part = leader.rotate_session_id()?;
+leader.set_session_id(next_part)?;
+let mut reader = leader.reader()?;
+let reading = reader.read(); // reading.session_id travels with this timecode
+```
+
+Set/rotate calls synchronously update local readers before returning and request
+an immediate complete state publication. Connected followers receive the new ID
+through the reliable state track; new connections receive the current ID in the
+initial snapshot. No additional handshake or reconnection is required. Setting
+the same ID is idempotent. Playback, scheduled controls, discontinuity counters,
+clock observations, and slew state are unchanged. Seeking does not automatically
+rotate the ID: the application decides what constitutes a new part.
+
+Readers expose the latest received ID, including during acquisition and holdover.
+Before receiving an ID, or with an older sender, it is `None`. Frozen snapshots
+retain their captured ID. These updates are latest-state metadata, not a durable
+part-change log or a scheduled frame boundary: rapid rotations can coalesce,
+network delay affects when a follower learns an ID, and readers cannot infer
+unreceived rotations during holdover. Future presentation evaluations use the
+captured ID. They cannot predict a future caller rotation.
+
+WASM readings expose `sessionId` as a canonical UUID string (absent/undefined
+when unknown); browser timing traces retain it in their captured reading output.
+Foreign `Reading` records contain `has_session_id`, `session_id_high`, and
+`session_id_low` (camel/Pascal case in Swift/C#). The two halves are the first and
+last eight bytes interpreted as big-endian unsigned 64-bit integers. This keeps
+reader evaluation allocation-free and retains all 128 bits. Generated leader
+options accept `session_id(high, low)`; leaders expose `set_session_id(high, low)`
+and `rotate_session_id()`, returning a `SessionId` record with `high` and `low`.
+Use the generated language's usual method casing. Core-only readers expose the
+same ID fields without requiring a native engine.
+
+The foreign Reading layout has grown; regenerate bindings and rebuild consumers
+with the matching library rather than mixing this ABI with older binaries.

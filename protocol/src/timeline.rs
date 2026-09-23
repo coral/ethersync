@@ -94,6 +94,8 @@ pub struct Scheduled {
 #[derive(Clone, Copy, Debug)]
 pub struct Timeline {
     pub session: [u8; 16],
+    /// Caller-controlled recording-part UUID; absent for legacy senders.
+    pub session_id: Option<[u8; 16]>,
     pub revision: u64,
     pub discontinuity: u64,
     pub format: FrameFormat,
@@ -107,6 +109,7 @@ impl Default for Timeline {
     fn default() -> Self {
         Self {
             session: [0; 16],
+            session_id: None,
             revision: 0,
             discontinuity: 0,
             format: FrameFormat::default(),
@@ -143,6 +146,7 @@ impl Timeline {
         wire::Snapshot {
             version: 1,
             session: self.session.to_vec(),
+            session_id: self.session_id.map_or_else(Vec::new, |id| id.to_vec()),
             revision: self.revision,
             discontinuity: self.discontinuity,
             source_kind: match self.source_kind {
@@ -173,6 +177,7 @@ impl Timeline {
         let f = s.format.as_ref().unwrap();
         let mut t = Self {
             session: s.session.as_slice().try_into().unwrap(),
+            session_id: s.session_id.as_slice().try_into().ok(),
             revision: s.revision,
             discontinuity: s.discontinuity,
             format: FrameFormat::new(f.numerator, f.denominator, f.drop_frame)?,
@@ -221,6 +226,9 @@ pub struct Status {
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Reading {
+    /// Recording-part UUID from the latest accepted state, even during holdover.
+    /// None until a sender provides one; independent of clock acquisition.
+    pub session_id: Option<[u8; 16]>,
     pub position: Position,
     pub format: FrameFormat,
     pub rate: Rate,
@@ -331,6 +339,7 @@ impl View {
         position = Position::from_fixed(position.fixed() + (remaining * 4294967296.) as i128);
         let initialized = self.mapping.last_sample_ns != 0;
         Reading {
+            session_id: self.timeline.session_id,
             position: if initialized {
                 position
             } else {

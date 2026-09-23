@@ -60,6 +60,10 @@ pub fn timecode_format_elapsed(format: &TimecodeFormat, nanoseconds: i64) -> Fra
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct Reading {
+    pub has_session_id: bool,
+    /// First/last eight UUID bytes, interpreted as big-endian unsigned integers.
+    pub session_id_high: u64,
+    pub session_id_low: u64,
     pub frames: i64,
     pub subframe: u32,
     pub fps_numerator: u32,
@@ -95,6 +99,13 @@ impl From<timeline::Reading> for Reading {
         let l = r.label();
         let s = r.status;
         Self {
+            has_session_id: r.session_id.is_some(),
+            session_id_high: u64::from_be_bytes(
+                r.session_id.unwrap_or_default()[..8].try_into().unwrap(),
+            ),
+            session_id_low: u64::from_be_bytes(
+                r.session_id.unwrap_or_default()[8..].try_into().unwrap(),
+            ),
             frames: r.position.frames,
             subframe: r.position.subframe,
             fps_numerator: r.format.numerator(),
@@ -1014,5 +1025,40 @@ pub fn endpoint_list_get(list: &EndpointList, index: u32) -> Result<Endpoint> {
             .inner
             .get(index as usize)
             .ok_or("endpoint index out of range")?,
+    })
+}
+
+/// UUID represented by two big-endian 64-bit halves, preserving all 128 bits.
+#[cfg(feature = "native")]
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SessionId {
+    pub high: u64,
+    pub low: u64,
+}
+#[cfg(feature = "native")]
+fn session_id_bytes(high: u64, low: u64) -> [u8; 16] {
+    let mut bytes = [0; 16];
+    bytes[..8].copy_from_slice(&high.to_be_bytes());
+    bytes[8..].copy_from_slice(&low.to_be_bytes());
+    bytes
+}
+#[cfg(feature = "native")]
+pub fn leader_options_session_id(options: &mut LeaderOptions, high: u64, low: u64) {
+    options.inner.session_id = Some(session_id_bytes(high, low));
+}
+#[cfg(feature = "native")]
+pub fn leader_set_session_id(leader: &Leader, high: u64, low: u64) -> Result<()> {
+    leader
+        .inner
+        .set_session_id(session_id_bytes(high, low))
+        .map_err(error)
+}
+#[cfg(feature = "native")]
+pub fn leader_rotate_session_id(leader: &Leader) -> Result<SessionId> {
+    let id = leader.inner.rotate_session_id().map_err(error)?;
+    Ok(SessionId {
+        high: u64::from_be_bytes(id[..8].try_into().unwrap()),
+        low: u64::from_be_bytes(id[8..].try_into().unwrap()),
     })
 }

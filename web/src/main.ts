@@ -16,6 +16,7 @@ let operation = 0;
 connect.disabled = true;
 
 interface Reading {
+  sessionId?: string;
   label: string; frames: number; speed: number; fps: number;
   connection: string; synchronization: string; source: string; health: string;
   uncertaintyMs: number; sampleAgeMs: number; offsetMs: number; driftPpm: number;
@@ -97,6 +98,7 @@ try {
     const evidence = r.offsetEvidence;
     put('evidence', evidence ? `${evidence.consistent ? `${evidence.lowerMs.toFixed(3)} … ${evidence.upperMs.toFixed(3)} ms` : 'Inconsistent timing evidence'} (${evidence.samples} samples)` : '—');
     put('frames', r.frames.toFixed(6)); put('source', `${r.source} / ${r.health}`);
+    put('session-id', r.sessionId ?? 'Unknown');
     put('discontinuity', r.discontinuity); put('event', r.event || '—');
     requestAnimationFrame(render);
   }

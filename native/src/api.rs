@@ -80,6 +80,8 @@ pub struct LeaderConfig {
     pub bind: SocketAddr,
     pub name: String,
     pub identity: String,
+    /// Recording-part UUID. None generates a fresh UUID for each leader startup.
+    pub session_id: Option<[u8; 16]>,
     pub format: FrameFormat,
     pub position: Position,
     pub rate: Rate,
@@ -95,6 +97,7 @@ impl Default for LeaderConfig {
             bind: "0.0.0.0:0".parse().unwrap(),
             name: "Tidkod".into(),
             identity: uuid::Uuid::new_v4().to_string(),
+            session_id: None,
             format: FrameFormat::default(),
             position: Position::ZERO,
             rate: Rate::PAUSED,
@@ -426,6 +429,22 @@ impl Leader {
     pub fn try_event(&self) -> Option<Event> {
         self.control.event()
     }
+    /// Publish a recording-part UUID without changing transport or clock state.
+    /// Readers expose the latest ID; frozen snapshots retain their captured ID.
+    pub fn set_session_id(&self, session_id: [u8; 16]) -> Result<()> {
+        let (tx, rx) = sync::sync_channel(1);
+        self.control
+            .commands
+            .try_send(Command::SessionId(session_id, tx))
+            .map_err(queue_error)?;
+        rx.recv().map_err(|_| Error::Shutdown)?
+    }
+    /// Start a new recording part with a random UUID and return the published ID.
+    pub fn rotate_session_id(&self) -> Result<[u8; 16]> {
+        let id = *uuid::Uuid::new_v4().as_bytes();
+        self.set_session_id(id)?;
+        Ok(id)
+    }
     pub fn play(&self) -> Result<()> {
         self.control.change(Change::Rate(Rate::NORMAL), None)
     }
@@ -572,6 +591,7 @@ pub(crate) enum Change {
     Set(Position, Rate),
 }
 pub(crate) enum Command {
+    SessionId([u8; 16], sync::SyncSender<Result<()>>),
     Reader(sync::SyncSender<Result<TimecodeReader>>),
     Change(Change, Option<u64>, sync::SyncSender<Result<()>>),
     Sample(SourceSample, sync::SyncSender<Result<()>>),

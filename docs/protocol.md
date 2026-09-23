@@ -26,6 +26,19 @@ Clock requests and replies use MoQ-lite-05 unreliable datagrams, not reliable gr
 
 Every application payload is a single protobuf message, without another length prefix. MoQ framing supplies its length. Maximum payload is 512 bytes, including unknown fields. Enforce the state frame length before assembling it in the application. Empty/malformed protobuf, missing required message objects, invalid enums, invalid rate/format values, invalid session identity, and unsupported versions are errors. Unknown protobuf fields may be skipped within the limit. Ordinary state snapshots target less than 128 bytes; typical probes are less than 64 bytes.
 
+`Snapshot.session_id` (tag 10) is an independent, caller-controlled recording-part
+UUID. New leaders always send 16 bytes in UUID/network byte order. An empty field
+means unknown/unsupported (legacy sender); other lengths are invalid. Old readers
+ignore this additive field, and the existing golden fixtures remain unchanged.
+The field is present in each complete state snapshot, including the initial
+snapshot on connection and heartbeats. Setting/rotating it publishes immediately
+with the normal monotonically increasing revision. Followers accept it only as
+part of an otherwise valid newer snapshot. It does not alter `session`, reset the
+clock, increment discontinuity, or change/suppress scheduled transport controls.
+It is leader-authoritative state, not a follower-selected or negotiated value.
+See [recording-part APIs](timing-apis.md#recording-part-session-ids) for delivery
+and holdover semantics.
+
 Session identifiers are 16 random bytes, newly generated on every leader startup. Revision starts at 1 and increases for each publication. Discontinuity starts at 0 and increases on each explicit change; scheduled changes reserve higher IDs. All IDs are unsigned, and wrap is not supported. The protocol assumes practical sessions finish before counters exhaust.
 
 All application clock fields are unsigned monotonic nanoseconds within `0..=i64::MAX` (roughly 292 years). Each engine has its own arbitrary epoch. Only differences within a clock domain are directly comparable. Timestamp external samples with the leader engine's clock. Local reader timestamps use the follower engine's clock. Wall-clock time and the system clock are never modified.

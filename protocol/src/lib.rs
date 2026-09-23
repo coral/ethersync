@@ -77,6 +77,9 @@ pub fn validate_snapshot(s: &wire::Snapshot) -> Result<(), Error> {
     if s.session.len() != 16 || s.revision == 0 {
         return Err(Error::Invalid("identity/revision"));
     }
+    if !s.session_id.is_empty() && s.session_id.len() != 16 {
+        return Err(Error::Invalid("recording session ID"));
+    }
     if !matches!(s.source_kind, 1 | 2) || !matches!(s.source_health, 1 | 2) {
         return Err(Error::Invalid("source enum"));
     }

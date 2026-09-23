@@ -1,3 +1,4 @@
+use tidkod_protocol::timeline::Timeline;
 use tidkod_protocol::{wire::*, *};
 fn unhex(s: &str) -> Vec<u8> {
     let s = s.trim();
@@ -97,4 +98,68 @@ fn probe_direction_timestamps_are_unambiguous() {
     assert!(decode_probe(&encode(&p).unwrap()).is_err());
     let p = wire::Probe { t2: 2, t3: 0, ..p };
     assert!(decode_probe(&encode(&p).unwrap()).is_err());
+}
+
+#[test]
+fn recording_session_id_is_optional_and_exactly_sixteen_bytes() {
+    let legacy = decode_snapshot(&unhex(include_str!("../fixtures/paused.hex"))).unwrap();
+    assert_eq!(Timeline::from_wire(&legacy).unwrap().session_id, None);
+    for len in [1, 15, 17, 32] {
+        let mut s = legacy.clone();
+        s.session_id = vec![7; len];
+        assert!(validate_snapshot(&s).is_err());
+    }
+    // All UUID bit patterns, including nil, are opaque caller-owned identifiers.
+    for id in [[0; 16], [0xff; 16], [7; 16]] {
+        let mut s = legacy.clone();
+        s.session_id = id.to_vec();
+        let t = Timeline::from_wire(&decode_snapshot(&encode(&s).unwrap()).unwrap()).unwrap();
+        assert_eq!(t.session_id, Some(id));
+        assert_eq!(encode(&t.wire()).unwrap(), encode(&s).unwrap());
+    }
+}
+
+#[test]
+fn recording_parts_preserve_slew_schedules_and_connection_identity_rules() {
+    use tidkod_protocol::timeline::{FollowerCore, Scheduled};
+    let mut core = FollowerCore::new(Timeline::default(), Default::default());
+    core.connected();
+    let mut timeline = Timeline {
+        session: [1; 16],
+        session_id: Some([2; 16]),
+        revision: 1,
+        ..Default::default()
+    };
+    timeline.scheduled[0] = Scheduled {
+        discontinuity: 1,
+        anchor: tidkod_protocol::timeline::Anchor {
+            time_ns: 10_000_000_000,
+            position: tidkod_protocol::Position::from_frames(100),
+            rate: tidkod_protocol::Rate::NORMAL,
+        },
+    };
+    timeline.scheduled_len = 1;
+    core.state(timeline, 1);
+    core.view.correction_frames = 0.25;
+    core.view.mapping.accepted_observations = 25;
+    core.view.mapping.last_sample_ns = 1;
+    timeline.revision = 2;
+    timeline.session_id = Some([3; 16]);
+    assert!(
+        matches!(core.state(timeline, 2), Some(tidkod_protocol::timeline::Correction::Slew { frames }) if frames == -0.25)
+    );
+    assert_eq!(core.view.correction_frames, 0.25);
+    assert_eq!(core.view.mapping.accepted_observations, 25);
+    assert_eq!(core.view.timeline.scheduled_len, 1);
+    assert_eq!(core.view.timeline.at(10_000_000_000).0.frames, 100);
+    assert_eq!(core.view.evaluate(2).session_id, Some([3; 16]));
+    timeline.revision = 1;
+    timeline.session_id = Some([2; 16]);
+    core.state(timeline, 3);
+    assert_eq!(core.view.evaluate(3).session_id, Some([3; 16]));
+    timeline.revision = 3;
+    timeline.session = [9; 16];
+    core.state(timeline, 4);
+    assert_eq!(core.view.timeline.session, [1; 16]);
+    assert_eq!(core.view.evaluate(4).session_id, Some([3; 16]));
 }

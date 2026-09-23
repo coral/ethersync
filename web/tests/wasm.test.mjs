@@ -293,3 +293,30 @@ test('TOD reference wraps midnight, accounts for timezone, and does not round to
   assert.ok(Math.abs(compareTod(.03,30,midnight,0).differenceMs-1)<.00001);
   assert.equal(compareTod(30*19800,30,midnight,-330).differenceMs,0);
 });
+
+test('recording UUID updates without resetting timing and remains in frozen/holdover readings', () => {
+  const f = new Follower();
+  let frozen;
+  const withId = (rev, id) => Uint8Array.from([...state({rev, speed: 0}), ...bytes(10, id)]);
+  try {
+    assert.equal(f.read(0).sessionId, undefined);
+    f.connected();
+    f.snapshot(withId(1, Array(16).fill(0x12)), 1);
+    const now = sync(f);
+    const before = f.read(now);
+    assert.equal(before.sessionId, '12121212-1212-1212-1212-121212121212');
+    frozen = f.capture_snapshot();
+    f.snapshot(withId(2, Array(16).fill(0x34)), now);
+    const after = f.read(now);
+    assert.equal(after.sessionId, '34343434-3434-3434-3434-343434343434');
+    assert.equal(after.acceptedObservations, before.acceptedObservations);
+    assert.equal(after.synchronization, 'Synchronized');
+    assert.equal(after.discontinuity, before.discontinuity);
+    assert.equal(after.frames, before.frames);
+    f.snapshot(withId(1, Array(16).fill(0x12)), now); // stale state cannot roll back the ID
+    assert.equal(f.read(now).sessionId, after.sessionId);
+    assert.equal(frozen.read(now).sessionId, before.sessionId);
+    assert.equal(f.read(now + 10000).sessionId, after.sessionId);
+    assert.throws(() => f.snapshot(withId(3, [1, 2]), now + 10000), /session ID/);
+  } finally { frozen?.free(); f.free(); }
+});

@@ -19,6 +19,7 @@ int main() {
     auto engine = created.take();
     auto options = es::LeaderOptions::create();
     options.advertise(false);
+    options.session_id(0x1234, 0x5678);
     auto endpoint = es::Endpoint::loopback(0);
     CHECK(endpoint);
     options.bind_endpoint(endpoint.value());
@@ -30,6 +31,11 @@ int main() {
     auto reader = reading.take();
     CHECK(leader.seek(-7, 0x80000000u));
     CHECK(reader.read().frames == -7);
+    CHECK(reader.read().has_session_id && reader.read().session_id_high == 0x1234);
+    auto part = leader.rotate_session_id();
+    CHECK(part && reader.read().session_id_low == part.value().low);
+    CHECK(leader.set_session_id(0x8765, 0x4321));
+    CHECK(reader.read().session_id_low == 0x4321);
     CHECK(reader.read().subframe == 0x80000000u);
     reader.snapshot_into(snapshot);
     const auto leader_snapshot = reader.snapshot();

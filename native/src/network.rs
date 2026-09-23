@@ -335,6 +335,11 @@ impl LeaderJob {
         };
         let timeline = Timeline {
             session: info.session,
+            session_id: Some(
+                config
+                    .session_id
+                    .unwrap_or_else(|| *uuid::Uuid::new_v4().as_bytes()),
+            ),
             revision: 1,
             format: config.format,
             anchor: Anchor {
@@ -384,6 +389,13 @@ impl LeaderJob {
                 Command::Reader(tx) => self
                     .readers
                     .add(leader_view(self.timeline, self.clock.now_ns()), tx),
+                Command::SessionId(id, reply) => {
+                    publish |= self.timeline.session_id != Some(id);
+                    self.timeline.session_id = Some(id);
+                    self.readers
+                        .publish(leader_view(self.timeline, self.clock.now_ns()));
+                    let _ = reply.send(Ok(()));
+                }
                 Command::Change(change, effective, reply) => {
                     let result =
                         change_timeline(&mut self.timeline, change, effective, self.clock.now_ns());
@@ -668,7 +680,7 @@ impl FollowerJob {
                     self.disconnect();
                     self.retry = Instant::now();
                 }
-                Command::Change(_, _, tx) | Command::Sample(_, tx) => {
+                Command::Change(_, _, tx) | Command::Sample(_, tx) | Command::SessionId(_, tx) => {
                     let _ = tx.send(Err(Error::Invalid("follower cannot lead")));
                 }
             }

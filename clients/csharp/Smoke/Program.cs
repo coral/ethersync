@@ -47,9 +47,18 @@ using (var core = Core.Configured(long.MaxValue - 100, uint.MaxValue, 30, 1, fal
 #if TIDKOD_NATIVE
 using var engine = new Engine();
 using var options = new LeaderOptions();
+options.SessionId(0x1234, 0x5678);
 options.Advertise(false);
 options.Bind(new IPEndPoint(IPAddress.Loopback, 0));
 using var leader = engine.Leader(options);
+using (var sessionReader = leader.Reader()) {
+    Check(sessionReader.Read().HasSessionId && sessionReader.Read().SessionIdHigh == 0x1234, "configured recording ID");
+    var part = leader.RotateSessionId();
+    Check(sessionReader.Read().SessionIdLow == part.Low, "rotated recording ID");
+    leader.SetSessionId(0x8765, 0x4321);
+    Check(sessionReader.Read().SessionIdLow == 0x4321, "manual recording ID");
+}
+
 leader.Seek(-7, 0x80000000);
 using var reader = leader.Reader();
 Check(reader.Read().Frames == -7 && reader.Read().Subframe == 0x80000000, "native Q32");
