@@ -1,5 +1,5 @@
 [package]
-name = "ethersync-sdk"
+name = "tidkod-sdk"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

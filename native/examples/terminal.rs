@@ -13,12 +13,12 @@ use crossterm::{
         EnterAlternateScreen, LeaveAlternateScreen,
     },
 };
-use libethersync::{MonotonicClock, Reading, TimecodeReader};
 use std::{
     collections::VecDeque,
     io::{self, Write},
     time::Duration,
 };
+use tidkod::{MonotonicClock, Reading, TimecodeReader};
 
 // A 20 Hz UI can visually differ by 1.5 frames at 30 fps even with perfect sync.
 pub const REFRESH_INTERVAL: Duration = Duration::from_nanos(1_000_000_000 / 60);
@@ -121,7 +121,7 @@ impl Terminal {
             )
         };
         if height >= 12 {
-            rows[0] = format!(" ETHERSYNC / {}", panel.title);
+            rows[0] = format!(" TIDKOD / {}", panel.title);
             rows[1] = format!(" {}", panel.address);
             rows[2] = format!(" {}", panel.certificate);
             let mut body = vec![

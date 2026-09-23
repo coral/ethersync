@@ -55,7 +55,7 @@ pub fn generate(
     functions: &[syn::ItemFn],
 ) {
     let mut s = String::from(
-        "// Generated from src/api.rs. Do not edit.\n#nullable enable\nusing System;\nusing System.Text;\nusing Microsoft.Win32.SafeHandles;\nusing Sys = Ethersync.Sys;\nnamespace Ethersync;\n",
+        "// Generated from src/api.rs. Do not edit.\n#nullable enable\nusing System;\nusing System.Text;\nusing Microsoft.Win32.SafeHandles;\nusing Sys = Tidkod.Sys;\nnamespace Tidkod;\n",
     );
     for (name, fields) in records {
         s += &format!(
@@ -83,7 +83,7 @@ pub fn generate(
     }
     for name in opaque {
         s += &format!(
-            "internal sealed unsafe class {name}Handle : OwnedHandle {{ internal {name}Handle(Sys.{name}* value):base() {{SetHandle((IntPtr)value);}} protected override bool ReleaseHandle() {{Sys.NativeMethods.ethersync_{}_free((Sys.{name}*)handle);return true;}} }}\n",
+            "internal sealed unsafe class {name}Handle : OwnedHandle {{ internal {name}Handle(Sys.{name}* value):base() {{SetHandle((IntPtr)value);}} protected override bool ReleaseHandle() {{Sys.NativeMethods.tidkod_{}_free((Sys.{name}*)handle);return true;}} }}\n",
             name.to_lowercase()
         );
         s += &format!(
@@ -168,7 +168,7 @@ pub fn generate(
             } else if records.contains_key(&ret) {
                 format!("Sys.{ret}")
             } else if ret == "String" || ret == "Vec<u8>" {
-                "Sys.EsBuffer*".into()
+                "Sys.TKBuffer*".into()
             } else {
                 ty(&ret)
             };
@@ -176,13 +176,13 @@ pub fn generate(
                 s += &format!("{rt} value=default;\n");
                 call.push("&value".into());
             }
-            s += "Sys.EsBuffer* error=null;\n";
+            s += "Sys.TKBuffer* error=null;\n";
             call.push("&error".into());
             for p in &pinned {
                 s += &format!("{p} {{\n");
             }
             s += &format!(
-                "Native.Check(Sys.NativeMethods.ethersync_{fname}({}),error);\n",
+                "Native.Check(Sys.NativeMethods.tidkod_{fname}({}),error);\n",
                 call.join(",")
             );
             for _ in &pinned {
@@ -208,16 +208,16 @@ pub fn generate(
         }
         s += "}\n";
     }
-    fs::write(dir.join("Ethersync.g.cs"), s).unwrap();
+    fs::write(dir.join("Tidkod.g.cs"), s).unwrap();
     fs::write(
-        dir.join("Ethersync.Support.cs"),
-        include_str!("templates/Ethersync.Support.cs"),
+        dir.join("Tidkod.Support.cs"),
+        include_str!("templates/Tidkod.Support.cs"),
     )
     .unwrap();
     if opaque.contains("Endpoint") {
         fs::write(
-            dir.join("Ethersync.Native.cs"),
-            include_str!("templates/Ethersync.Native.cs"),
+            dir.join("Tidkod.Native.cs"),
+            include_str!("templates/Tidkod.Native.cs"),
         )
         .unwrap();
     }

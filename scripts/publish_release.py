@@ -12,9 +12,9 @@ from sdk import TARGETS, machine, run, unpack, version
 
 
 def expected_assets(release_version):
-    names = {f"ethersync-{release_version}-{variant}-{target}" + (".zip" if "windows" in target else ".tar.gz")
+    names = {f"tidkod-{release_version}-{variant}-{target}" + (".zip" if "windows" in target else ".tar.gz")
              for target in TARGETS for variant in ("native", "core")}
-    names.add(f"ethersync-{release_version}-apple-xcframework.zip")
+    names.add(f"tidkod-{release_version}-apple-xcframework.zip")
     return names
 
 
@@ -23,7 +23,7 @@ def validate_assets(directory, release_version):
     expected = expected_assets(release_version)
     assert {p.name for p in assets} == expected, "Incomplete or unexpected release asset set"
     for path in assets:
-        with tempfile.TemporaryDirectory(prefix="ethersync-verify-") as temp:
+        with tempfile.TemporaryDirectory(prefix="tidkod-verify-") as temp:
             sdk = unpack(path, Path(temp) / "sdk")
             info = dict(line.split("=", 1) for line in (sdk / "BUILD.txt").read_text().splitlines())
             assert info["version"] == release_version
@@ -32,7 +32,7 @@ def validate_assets(directory, release_version):
             if "apple-xcframework" in path.name:
                 assert info["variant"] == "native" and info["profile"] == "release"
                 assert (sdk / "Package.swift").is_file()
-                framework = sdk / "RustEthersync.xcframework"
+                framework = sdk / "RustTidkod.xcframework"
                 entries = plistlib.loads((framework / "Info.plist").read_bytes())["AvailableLibraries"]
                 expected_slices = {
                     "macos-arm64_x86_64": ("macos", ["arm64", "x86_64"], ""),
@@ -46,20 +46,20 @@ def validate_assets(directory, release_version):
                     assert entry["SupportedPlatform"] == platform
                     assert sorted(entry["SupportedArchitectures"]) == architectures
                     assert entry.get("SupportedPlatformVariant", "") == variant
-                    assert (framework / entry["LibraryIdentifier"] / "libethersync_bindings.a").is_file()
+                    assert (framework / entry["LibraryIdentifier"] / "libtidkod_bindings.a").is_file()
                 continue
             target, variant = info["target"], info["variant"]
             assert f"-{variant}-{target}." in path.name
             assert info["profile"] == "release"
             windows, apple = "windows" in target, "apple" in target
-            library = "ethersync_bindings.dll" if windows else "libethersync_bindings." + ("dylib" if apple else "so")
+            library = "tidkod_bindings.dll" if windows else "libtidkod_bindings." + ("dylib" if apple else "so")
             assert machine(sdk / "lib" / library) == target.split("-")[0]
-            required = ["include/ethersync.h", "include/ethersync-client.hpp", "examples/client.c", "examples/client.cpp",
-                        "lib/ethersync_bindings.lib" if windows else "lib/libethersync_bindings.a"]
+            required = ["include/tidkod.h", "include/tidkod-client.hpp", "examples/client.c", "examples/client.cpp",
+                        "lib/tidkod_bindings.lib" if windows else "lib/libtidkod_bindings.a"]
             if windows:
-                required += ["lib/ethersync_bindings.dll.lib", "csharp/Ethersync.csproj", "include/NativeMethods.g.cs"]
+                required += ["lib/tidkod_bindings.dll.lib", "csharp/Tidkod.csproj", "include/NativeMethods.g.cs"]
             if apple:
-                required += ["Package.swift", "swift-dylib/libEthersync.dylib", "swift-dylib/libEthersyncSys.dylib"]
+                required += ["Package.swift", "swift-dylib/libTidkod.dylib", "swift-dylib/libTidkodSys.dylib"]
             for name in required:
                 assert (sdk / name).is_file(), name
     checksums = directory / "SHA256SUMS"
@@ -82,7 +82,7 @@ def publish(tag, directory):
         print("Release already published with identical assets; nothing changed.")
         return
     if not release:
-        run("gh", "release", "create", tag, "--verify-tag", "--draft", "--title", f"Ethersync {tag}", "--generate-notes")
+        run("gh", "release", "create", tag, "--verify-tag", "--draft", "--title", f"Tidkod {tag}", "--generate-notes")
     # A draft is recoverable: replace partial uploads only before publication.
     run("gh", "release", "upload", tag, *assets, "--clobber")
     result = json.loads(run("gh", "release", "view", tag, "--json", "assets", capture=True))

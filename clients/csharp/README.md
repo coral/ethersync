@@ -1,12 +1,12 @@
 # C# client
 
-.NET 8 or later. `csbindgen` generates the internal `Ethersync.Sys` P/Invoke layer
+.NET 8 or later. `csbindgen` generates the internal `Tidkod.Sys` P/Invoke layer
 from the existing Rust C ABI. The shared API schema generates the public owned
 classes and value snapshots. The small C# support layer handles safe ownership,
 errors, native buffers, and .NET platform types; it does not reimplement syncing.
 
 ```csharp
-using Ethersync;
+using Tidkod;
 using System.Net;
 
 using var engine = new Engine();
@@ -31,36 +31,36 @@ and source/connection status are exposed through the same generated facade.
 ## Build and use
 
 ```sh
-cargo build -p ethersync-bindings
+cargo build -p tidkod-bindings
 # Or just the native C# bridge (no C++/Swift runtime dependency):
-cargo build -p ethersync-bindings --no-default-features --features native,csharp
+cargo build -p tidkod-bindings --no-default-features --features native,csharp
 
 dotnet run --project clients/csharp/Smoke -c Release
 ```
 
-Reference `clients/csharp/Ethersync.csproj` in your app. It compiles the generated
-sources from `target/debug/ethersync-generated/native` and copies the native
+Reference `clients/csharp/Tidkod.csproj` in your app. It compiles the generated
+sources from `target/debug/tidkod-generated/native` and copies the native
 library to the application output directory. No NuGet dependency is required.
 Your process architecture must match the native library. For release builds or
 custom artifact directories, set absolute MSBuild properties
-`EthersyncGeneratedDir` and `EthersyncNativeLibraryDir`.
+`TidkodGeneratedDir` and `TidkodNativeLibraryDir`.
 
-The SDK packager also includes `csharp/Ethersync.csproj` and `csharp/Smoke` beside
+The SDK packager also includes `csharp/Tidkod.csproj` and `csharp/Smoke` beside
 the SDK's generated sources and prebuilt native library. Run:
 
 ```sh
-ETHERSYNC_SDK_ARTIFACTS="$PWD/target/debug" ETHERSYNC_SDK_OUT="$PWD/dist" cargo build -p ethersync-sdk
-dotnet run --project dist/ethersync-native-aarch64-apple-darwin/csharp/Smoke -c Release
+TIDKOD_SDK_ARTIFACTS="$PWD/target/debug" TIDKOD_SDK_OUT="$PWD/dist" cargo build -p tidkod-sdk
+dotnet run --project dist/tidkod-native-aarch64-apple-darwin/csharp/Smoke -c Release
 ```
 
 For a portable core build, use a separate Cargo output directory:
 
 ```sh
-cargo build -p ethersync-bindings --no-default-features --features csharp --target-dir target/csharp-core
+cargo build -p tidkod-bindings --no-default-features --features csharp --target-dir target/csharp-core
 dotnet run --project clients/csharp/Smoke -c Release \
-  -p:EthersyncCoreOnly=true \
-  -p:EthersyncGeneratedDir="$PWD/target/csharp-core/debug/ethersync-generated/core" \
-  -p:EthersyncNativeLibraryDir="$PWD/target/csharp-core/debug"
+  -p:TidkodCoreOnly=true \
+  -p:TidkodGeneratedDir="$PWD/target/csharp-core/debug/tidkod-generated/core" \
+  -p:TidkodNativeLibraryDir="$PWD/target/csharp-core/debug"
 ```
 
 `Core` consumes snapshots/probes supplied by your own transport. Its native library
@@ -90,7 +90,7 @@ Positions retain signed 64-bit whole frames plus unsigned Q32 subframes. Timesta
 arguments are monotonic nanoseconds in the engine's `Now()` domain, not DateTime
 or Stopwatch ticks. `ReadForPresentation(nowNs, TimeSpan)` predicts ahead by a
 known output delay; it does not estimate screen latency. Invalid native input
-throws `EthersyncException` with the native message and status.
+throws `TidkodException` with the native message and status.
 
 The smoke test covers interop errors, bool/layout and drop-frame behavior, exact
 positions, allocation-free reads, real pinned loopback following, reconnect,

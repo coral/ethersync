@@ -1,9 +1,9 @@
-name: EthersyncSmoke
+name: TidkodSmoke
 options:
   deploymentTarget:
     iOS: "26.0"
 packages:
-  Ethersync:
+  Tidkod:
     path: SDK
 settings:
   base:
@@ -12,9 +12,9 @@ settings:
     CODE_SIGNING_ALLOWED: NO
     SWIFT_VERSION: "5.0"
     GENERATE_INFOPLIST_FILE: YES
-    PRODUCT_BUNDLE_IDENTIFIER: se.ethersync.smoke
+    PRODUCT_BUNDLE_IDENTIFIER: se.tidkod.smoke
 targets:
-  EthersyncSmoke:
+  TidkodSmoke:
     type: application
     platform: iOS
     sources: [App.swift]
@@ -22,21 +22,21 @@ targets:
       base:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-  EthersyncSmokeTests:
+  TidkodSmokeTests:
     type: bundle.unit-test
     platform: iOS
     sources: [SmokeTests.swift]
     dependencies:
-      - target: EthersyncSmoke
-      - package: Ethersync
+      - target: TidkodSmoke
+      - package: Tidkod
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: se.ethersync.smoke.tests
+        PRODUCT_BUNDLE_IDENTIFIER: se.tidkod.smoke.tests
 schemes:
-  EthersyncSmoke:
+  TidkodSmoke:
     build:
       targets:
-        EthersyncSmoke: all
-        EthersyncSmokeTests: [test]
+        TidkodSmoke: all
+        TidkodSmokeTests: [test]
     test:
-      targets: [EthersyncSmokeTests]
+      targets: [TidkodSmokeTests]

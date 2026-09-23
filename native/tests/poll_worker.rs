@@ -1,5 +1,5 @@
-use libethersync::{Engine, FollowerConfig, LeaderConfig, Rate, SyncState};
 use std::time::{Duration, Instant};
+use tidkod::{Engine, FollowerConfig, LeaderConfig, Rate, SyncState};
 
 #[test]
 fn fifteen_followers_share_one_worker_and_track_the_same_instant() {
@@ -66,7 +66,7 @@ fn probe_deadline_tails_with_discovery() {
 }
 
 fn probe_load(discovery: bool) {
-    use libethersync::{Event, Position};
+    use tidkod::{Event, Position};
     let engine = Engine::new().unwrap();
     let _discovery = discovery.then(|| engine.discovery(Default::default()).unwrap());
     let leader = engine
@@ -139,12 +139,7 @@ fn idle_worker_sleeps_and_command_wakeup_publishes_before_ack() {
         engine.worker_timing().passes - before <= 4,
         "idle worker is spinning"
     );
-    leader
-        .seek(libethersync::Position::from_frames(42))
-        .unwrap();
-    assert_eq!(
-        reader.read().position,
-        libethersync::Position::from_frames(42)
-    );
+    leader.seek(tidkod::Position::from_frames(42)).unwrap();
+    assert_eq!(reader.read().position, tidkod::Position::from_frames(42));
     engine.shutdown().unwrap();
 }

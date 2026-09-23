@@ -1,6 +1,6 @@
 # Boundary deadlines, interval evidence, and timing traces
 
-These additions live in `ethersync-protocol` and are shared by native and WASM clients.
+These additions live in `tidkod-protocol` and are shared by native and WASM clients.
 They do not change the protobuf schema, the four-timestamp exchange, or the current point
 estimator. They add local scheduling and evidence needed to evaluate further algorithm changes.
 
@@ -25,7 +25,7 @@ for mark in marks {
 }
 ```
 
-`TimecodeReader::snapshot()` returns a `Copy` `TimecodeSnapshot`, re-exported by `libethersync`.
+`TimecodeReader::snapshot()` returns a `Copy` `TimecodeSnapshot`, re-exported by `tidkod`.
 Protocol-only callers can convert a `View` with `TimecodeSnapshot::from(view)`. Its private state
 is evaluated through immutable `evaluate(local_ns)`,
 `evaluate_for_presentation(local_ns, delay_ns)`, and `next_boundary(local_ns)` methods. Capture
@@ -172,7 +172,7 @@ still works when additional timing observations are unavailable.
 4. From the repository root run:
 
    ```sh
-   pnpm --dir web replay /path/to/ethersync-timing.json
+   pnpm --dir web replay /path/to/tidkod-timing.json
    ```
 
 The log records lifecycle, raw snapshot/probe/reply bytes, monotonic call times, publication
@@ -217,7 +217,7 @@ The browser now pairs `Date.now()` with bracketed `performance.now()` and evalua
 at the bracket midpoint. Under Connection details, **Same-computer TOD check** reports the signed
 difference between that sampled timeline and local wall time. It is valid after issuing `tod`
 on a leader on the same computer using the same timezone, while running at +1×, without a later
-wall-clock adjustment. This reference does not use the Ethersync clock estimator. Millisecond wall
+wall-clock adjustment. This reference does not use the Tidkod clock estimator. Millisecond wall
 timestamps and the bracket limit precision; it does not measure either screen's presentation.
 
 With capture enabled, the latest 256 paired readings are included as `wallReferences`, independently
@@ -230,7 +230,7 @@ receipt, excluding terminal/compositor latency.
 Both terminal examples and the browser also display an independent **System HH:MM:SS.mmm**
 reference beside their timecode. The terminal pairs its wall-clock sample with the midpoint
 of two engine monotonic reads and reports its own TOD difference. These system-clock labels
-bypass the Ethersync mapping and timeline. Comparing them on screen is a control experiment:
+bypass the Tidkod mapping and timeline. Comparing them on screen is a control experiment:
 a similar gap in both system-clock labels exists independently of the synchronization math;
 agreement of system clocks but disagreement in timecode calls for further timeline/clock auditing.
 The test must use the same computer/timezone. It does not assume Ghostty is slow or insert an offset.

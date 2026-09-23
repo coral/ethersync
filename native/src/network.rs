@@ -7,7 +7,6 @@ use crate::{
     worker::Job,
     *,
 };
-use ethersync_protocol::{decode_probe, decode_snapshot, encode};
 use std::{
     future::Future,
     pin::Pin,
@@ -19,6 +18,7 @@ use std::{
     task::{Context, Poll},
     time::{Duration, Instant},
 };
+use tidkod_protocol::{decode_probe, decode_snapshot, encode};
 use web_transport_trait::poll::Session as _;
 fn transport(e: impl std::fmt::Display) -> Error {
     Error::Transport(e.to_string())
@@ -41,7 +41,7 @@ fn origin() -> (moq::origin::Producer, moq::origin::Driver) {
 async fn subscribe(origin: moq::origin::Producer, name: &str) -> Result<moq::track::Subscriber> {
     let b = origin
         .consume()
-        .routed_broadcast("ethersync/v1")
+        .routed_broadcast("tidkod/v1")
         .await
         .map_err(transport)?;
     b.track(name)
@@ -122,9 +122,7 @@ impl Peer {
     ) -> Result<Self> {
         let (publish, a) = origin();
         let (ingest, b) = origin();
-        let broadcast = publish
-            .create_broadcast("ethersync/v1")
-            .map_err(transport)?;
+        let broadcast = publish.create_broadcast("tidkod/v1").map_err(transport)?;
         let mut snapshots = if leader {
             Some(broadcast.create_track("state", None).map_err(transport)?)
         } else {
@@ -579,7 +577,7 @@ pub(crate) struct FollowerJob {
     peer: Option<Peer>,
     core: FollowerCore,
     readers: Readers,
-    probes: ethersync_protocol::probes::Probes,
+    probes: tidkod_protocol::probes::Probes,
     next_probe: Instant,
     retry: Instant,
     backoff: Duration,
@@ -759,8 +757,8 @@ impl FollowerJob {
                 let frame = result
                     .map_err(transport)?
                     .ok_or(Error::Invalid("empty state group"))?;
-                if frame.size > ethersync_protocol::MAX_MESSAGE as u64 {
-                    return Err(ethersync_protocol::Error::Size.into());
+                if frame.size > tidkod_protocol::MAX_MESSAGE as u64 {
+                    return Err(tidkod_protocol::Error::Size.into());
                 }
                 self.frame = Some(frame);
             }

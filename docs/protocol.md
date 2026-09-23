@@ -1,10 +1,10 @@
-# Ethersync v1 behavioral specification
+# Tidkod v1 behavioral specification
 
-The normative schema is [`ethersync.proto`](../protocol/proto/ethersync/v1/ethersync.proto). The [generated reference](messages.md) lists fields and tags. This document defines behavior and constraints beyond protobuf syntax. v1 has no migration or legacy-client negotiation.
+The normative schema is [`tidkod.proto`](../protocol/proto/tidkod/v1/tidkod.proto). The [generated reference](messages.md) lists fields and tags. This document defines behavior and constraints beyond protobuf syntax. v1 has no migration or legacy-client negotiation.
 
 ## Discovery and connection
 
-Advertise DNS-SD service `_ethersync._udp.local.`. SRV carries the endpoint port, A/AAAA records carry addresses, and TXT carries `id` (configured identity), `name` (display name), `v=1`, `fp` (64 hexadecimal characters, SHA-256 of the leaf certificate), and `transport=moq-lite-05`. Instance and host names contain a random session suffix, allowing equal display names. Consumers index by full service instance name, replace resolved records, and remove entries on DNS-SD expiry/goodbye. They must not identify a leader by display name alone.
+Advertise DNS-SD service `_tidkod._udp.local.`. SRV carries the endpoint port, A/AAAA records carry addresses, and TXT carries `id` (configured identity), `name` (display name), `v=1`, `fp` (64 hexadecimal characters, SHA-256 of the leaf certificate), and `transport=moq-lite-05`. Instance and host names contain a random session suffix, allowing equal display names. Consumers index by full service instance name, replace resolved records, and remove entries on DNS-SD expiry/goodbye. They must not identify a leader by display name alone.
 
 The implementation polls interface changes every two seconds. Empty interface selection enables all interfaces. Explicit discovery addresses override automatic address publication; otherwise a specific bind address advertises that address, and wildcard binds use current interface addresses. IPv6 scopes are retained from DNS-SD interface metadata through `SocketAddrV6` into the QUIC dial; no URL conversion discards the scope. For explicit link-local server binds, restrict advertisement to the corresponding interface index. Discovery errors are reported independently and never prevent manual connections.
 
@@ -16,7 +16,7 @@ Browsers validate TLS through a trusted certificate or `serverCertificateHashes`
 
 ## Broadcast and tracks
 
-Each direction announces `ethersync/v1`. The leader publishes tracks `state` and `clock/reply`; the follower publishes `clock/request`. A server creates private origin namespaces for each connection, so a follower's request and corresponding reply track cannot be subscribed to by another follower. The logical leader-state track is shared: every connection receives the same complete snapshot through a latest-value state channel. State is copied into that connection's MoQ track. No follower publication is forwarded to another connection.
+Each direction announces `tidkod/v1`. The leader publishes tracks `state` and `clock/reply`; the follower publishes `clock/request`. A server creates private origin namespaces for each connection, so a follower's request and corresponding reply track cannot be subscribed to by another follower. The logical leader-state track is shared: every connection receives the same complete snapshot through a latest-value state channel. State is copied into that connection's MoQ track. No follower publication is forwarded to another connection.
 
 Each state snapshot is the only frame in an independently decodable, finished MoQ group. Monotonic group sequence numbers are transport-local; `Snapshot.revision` is the application ordering authority. Track timestamps are MoQ metadata, not clock measurements. A newly connected follower receives the current snapshot. Complete snapshots repeat on heartbeat; no state delta depends on an older group. State caches retain two seconds and have a 256 KiB eviction target per origin (the MoQ pool is a target, not a strict total-memory ceiling).
 

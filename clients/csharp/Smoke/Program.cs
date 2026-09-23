@@ -3,13 +3,13 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
-using Ethersync;
+using Tidkod;
 
 static void Check(bool value, string message) { if (!value) throw new Exception(message); }
 using (var format = new TimecodeFormat(30000, 1001, true)) {
     Check(format.Position(0,1,0,2).Frames == 1800, "drop-frame ABI");
     try { format.Position(0,1,0,0); throw new Exception("invalid drop label accepted"); }
-    catch (EthersyncException) { }
+    catch (TidkodException) { }
 }
 using (var core = new Core())
 {
@@ -23,7 +23,7 @@ using (var core = new Core())
     Check(!copied.NextBoundary(123).Valid, "fallback snapshot boundary");
     Check(copied.ReadForPresentation(123, TimeSpan.FromMilliseconds(1)).Frames == initial.Frames, "snapshot presentation");
     try { core.State(new byte[] {255}, 123); throw new Exception("bad protobuf accepted"); }
-    catch (EthersyncException e) { Check(e.Status != 0 && e.Message.Length > 0, "managed error"); }
+    catch (TidkodException e) { Check(e.Status != 0 && e.Message.Length > 0, "managed error"); }
     core.Connected();
     Check(core.Probe(1_000_000).Length > 0, "owned byte output");
     core.Dispose();
@@ -44,7 +44,7 @@ using (var core = Core.Configured(long.MaxValue - 100, uint.MaxValue, 30, 1, fal
     for (int i=0;i<100_000;i++) { core.Read((ulong)i); core.SnapshotInto(reusable); reusable.Read((ulong)i); }
     Check(GC.GetAllocatedBytesForCurrentThread()==before, "reads allocate managed memory");
 }
-#if ETHERSYNC_NATIVE
+#if TIDKOD_NATIVE
 using var engine = new Engine();
 using var options = new LeaderOptions();
 options.Advertise(false);
@@ -61,7 +61,7 @@ Check(endpoints.Count() == 1, "specific listener endpoint");
 using var firstEndpoint = endpoints.Get(0);
 Check(firstEndpoint.Port() > 0, "listener port");
 try { using var invalidEndpoint = endpoints.Get(endpoints.Count()); throw new Exception("endpoint bounds accepted"); }
-catch (EthersyncException) { }
+catch (TidkodException) { }
 using var endpoint = leader.Endpoint();
 using var followOptions = new FollowerOptions(endpoint.ToIPEndPoint());
 followOptions.Pin(leader.Fingerprint());
@@ -83,7 +83,7 @@ Console.WriteLine(remote.Read().Timecode);
 using var ipv6=Endpoint.From(new IPEndPoint(IPAddress.Parse("fe80::1%7"),4443));
 Check(ipv6.ToIPEndPoint().Address.ScopeId == 7,"IPv6 scope");
 try { using var invalid = new FollowerOptions(new IPEndPoint(IPAddress.Loopback,0)); throw new Exception("port zero accepted"); }
-catch (EthersyncException) { }
+catch (TidkodException) { }
 // Reads and disposal may race without freeing native memory under a call.
 var raced=leader.Reader();
 var worker=Task.Run(() => { for(int i=0;i<10_000;i++) { try { raced.Read(); } catch(ObjectDisposedException) { break; } } });
@@ -100,7 +100,7 @@ Check(saved.Read(123).Frames == -7, "snapshot survives shutdown");
 #endif
 Console.WriteLine("C# wrappers passed");
 
-#if ETHERSYNC_NATIVE
+#if TIDKOD_NATIVE
 [MethodImpl(MethodImplOptions.NoInlining)]
 static void AbandonReader(Leader leader) { var reader = leader.Reader(); reader.Read(); }
 #endif

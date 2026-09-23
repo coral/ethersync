@@ -19,7 +19,7 @@ fn published_client_reads_http3_snapshot_from_polling_server() {
         let runtime = Runtime::default();
         let web = web::Driver::new(runtime.timers());
         let (source, mut origin_driver) = moq::origin::Producer::new(Default::default());
-        let broadcast = source.create_broadcast("ethersync/v1").unwrap();
+        let broadcast = source.create_broadcast("tidkod/v1").unwrap();
         let mut track = broadcast.create_track("state", None).unwrap();
         track
             .write_frame(
@@ -94,7 +94,7 @@ fn published_client_reads_http3_snapshot_from_polling_server() {
                 .unwrap();
             let broadcast = ingest
                 .consume()
-                .announced_broadcast("ethersync/v1")
+                .announced_broadcast("tidkod/v1")
                 .await
                 .unwrap();
             let mut track = broadcast

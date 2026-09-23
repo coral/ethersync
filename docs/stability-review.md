@@ -26,7 +26,7 @@ for a changed regime; changing asymmetry can also supply that evidence. Four tim
 uniquely distinguish clock offset from unequal one-way delays. The uncertainty fix reports this
 ambiguity rather than claiming to remove it. Aging confidence follows the general dispersion
 principle in [RFC 5905's clock filter](https://www.rfc-editor.org/rfc/rfc5905.html#section-10);
-the particular thresholds here are Ethersync policy, not NTP compliance.
+the particular thresholds here are Tidkod policy, not NTP compliance.
 
 Uncertainty grows at 1000 ppm, conservatively allowing separation between a fitted drift within
 ±500 ppm and an actual relative rate within ±500 ppm. This is an engineering estimate under those

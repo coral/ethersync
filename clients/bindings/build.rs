@@ -68,12 +68,10 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp.rs");
     println!("cargo:rerun-if-changed=templates");
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
-        println!(
-            "cargo:rustc-link-arg-cdylib=-Wl,-install_name,@rpath/libethersync_bindings.dylib"
-        );
+        println!("cargo:rustc-link-arg-cdylib=-Wl,-install_name,@rpath/libtidkod_bindings.dylib");
     }
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
-        println!("cargo:rustc-link-arg-cdylib=-Wl,-soname,libethersync_bindings.so");
+        println!("cargo:rustc-link-arg-cdylib=-Wl,-soname,libtidkod_bindings.so");
     }
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let native = env::var_os("CARGO_FEATURE_NATIVE").is_some();
@@ -235,7 +233,7 @@ fn main() {
         let file = out.join("swift.rs");
         fs::write(&file, (bridge + &body).replace("->()", "")).unwrap();
         swift_bridge_build::parse_bridges([&file])
-            .write_all_concatenated(out.join("swift"), "Ethersync");
+            .write_all_concatenated(out.join("swift"), "Tidkod");
     }
     if env::var_os("CARGO_FEATURE_C").is_some() {
         let mut c = String::from("use crate::c_support::*;\n");
@@ -248,7 +246,7 @@ fn main() {
         for name in &opaque {
             c += &format!("pub struct {name}{{_private:()}}\n");
             c += &format!(
-                "#[unsafe(no_mangle)] pub unsafe extern \"C\" fn ethersync_{}_free(value:*mut {name}){{if !value.is_null(){{unsafe{{drop(Box::from_raw(value.cast::<crate::api::{name}>()))}}}}}}\n",
+                "#[unsafe(no_mangle)] pub unsafe extern \"C\" fn tidkod_{}_free(value:*mut {name}){{if !value.is_null(){{unsafe{{drop(Box::from_raw(value.cast::<crate::api::{name}>()))}}}}}}\n",
                 name.to_lowercase()
             );
         }
@@ -287,7 +285,7 @@ fn main() {
             let cty = if opaque.contains(&t) {
                 format!("*mut {t}")
             } else if t == "String" || t == "Vec<u8>" {
-                "*mut EsBuffer".into()
+                "*mut TKBuffer".into()
             } else {
                 t.clone()
             };
@@ -295,7 +293,7 @@ fn main() {
                 decl.push(format!("out:*mut {cty}"));
                 init += "if out.is_null(){return Err(\"null output\".into());}";
             }
-            decl.push("error:*mut *mut EsBuffer".into());
+            decl.push("error:*mut *mut TKBuffer".into());
             let call = format!(
                 "crate::api::{name}({}){}",
                 callargs.join(","),
@@ -324,7 +322,7 @@ fn main() {
                 format!("let value={value};unsafe{{out.write(value);}}")
             };
             c += &format!(
-                "#[unsafe(no_mangle)] pub unsafe extern \"C\" fn ethersync_{name}({})->i32{{let call=||{{{init}{statement}Ok(())}};unsafe{{invoke(error,call)}}}}\n",
+                "#[unsafe(no_mangle)] pub unsafe extern \"C\" fn tidkod_{name}({})->i32{{let call=||{{{init}{statement}Ok(())}};unsafe{{invoke(error,call)}}}}\n",
                 decl.join(",")
             );
         }
@@ -332,7 +330,7 @@ fn main() {
         fs::write(&file, c).unwrap();
         let config = cbindgen::Config {
             language: cbindgen::Language::C,
-            include_guard: Some("ETHERSYNC_H".into()),
+            include_guard: Some("TIDKOD_H".into()),
             cpp_compat: true,
             ..Default::default()
         };
@@ -342,7 +340,7 @@ fn main() {
             .with_src("src/c_support.rs")
             .generate()
             .expect("C header")
-            .write_to_file(out.join("ethersync.h"));
+            .write_to_file(out.join("tidkod.h"));
     }
     // Stable, relocatable generated-source directory beside the Cargo artifacts.
     // Cargo supports both build/<package-hash>/out and build/<package>/<hash>/out.
@@ -352,27 +350,26 @@ fn main() {
         .find(|dir| dir.file_name().is_some_and(|name| name == "build"))
         .and_then(|dir| dir.parent())
         .expect("Cargo OUT_DIR must be beneath the profile's build directory");
-    let generated =
-        profile
-            .join("ethersync-generated")
-            .join(if native { "native" } else { "core" });
+    let generated = profile
+        .join("tidkod-generated")
+        .join(if native { "native" } else { "core" });
     fs::create_dir_all(&generated).unwrap();
     fs::copy(out.join("API.txt"), generated.join("API.txt")).unwrap();
     if env::var_os("CARGO_FEATURE_C").is_some() {
-        fs::copy(out.join("ethersync.h"), generated.join("ethersync.h")).unwrap();
+        fs::copy(out.join("tidkod.h"), generated.join("tidkod.h")).unwrap();
     }
     if env::var_os("CARGO_FEATURE_SWIFT").is_some() {
         for (from, to) in [
             ("swift/SwiftBridgeCore.swift", "SwiftBridgeCore.swift"),
             ("swift/SwiftBridgeCore.h", "SwiftBridgeCore.h"),
-            ("swift/Ethersync/Ethersync.swift", "Ethersync.swift"),
-            ("swift/Ethersync/Ethersync.h", "EthersyncSwift.h"),
+            ("swift/Tidkod/Tidkod.swift", "Tidkod.swift"),
+            ("swift/Tidkod/Tidkod.h", "TidkodSwift.h"),
         ] {
             fs::copy(out.join(from), generated.join(to)).unwrap();
         }
         fs::write(
             generated.join("BridgingHeader.h"),
-            "#include \"SwiftBridgeCore.h\"\n#include \"EthersyncSwift.h\"\n",
+            "#include \"SwiftBridgeCore.h\"\n#include \"TidkodSwift.h\"\n",
         )
         .unwrap();
     }
@@ -381,8 +378,8 @@ fn main() {
         csbindgen::Builder::default()
             .input_extern_file(out.join("c.rs"))
             .input_extern_file("src/c_support.rs")
-            .csharp_namespace("Ethersync.Sys")
-            .csharp_dll_name("ethersync_bindings")
+            .csharp_namespace("Tidkod.Sys")
+            .csharp_dll_name("tidkod_bindings")
             .generate_csharp_file(generated.join("NativeMethods.g.cs"))
             .expect("C# sys bindings");
         csharp::generate(&generated, &opaque, &records, &functions);

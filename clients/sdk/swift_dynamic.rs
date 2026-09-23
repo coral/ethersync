@@ -4,7 +4,7 @@ fn run(command: &mut Command) {
     assert!(
         command
             .status()
-            .expect("Swift compiler is required for ETHERSYNC_SDK_SWIFT_DYLIB")
+            .expect("Swift compiler is required for TIDKOD_SDK_SWIFT_DYLIB")
             .success(),
         "Swift SDK compilation failed"
     );
@@ -19,17 +19,17 @@ pub fn build(sdk: &Path, native: bool, rust_target: &str) {
     std::fs::create_dir_all(&out).unwrap();
     for (module, files, dependency) in [
         (
-            "EthersyncSys",
+            "TidkodSys",
             vec![
                 sdk.join("swift/SwiftBridgeCore.swift"),
-                sdk.join("swift/Ethersync.swift"),
+                sdk.join("swift/Tidkod.swift"),
             ],
-            "ethersync_bindings",
+            "tidkod_bindings",
         ),
         (
-            "Ethersync",
-            vec![sdk.join("swift-client/Ethersync.swift")],
-            "EthersyncSys",
+            "Tidkod",
+            vec![sdk.join("swift-client/Tidkod.swift")],
+            "TidkodSys",
         ),
     ] {
         run(Command::new("swiftc")
@@ -67,7 +67,7 @@ pub fn build(sdk: &Path, native: bool, rust_target: &str) {
         .arg(sdk.join("swift-c"))
         .arg("-L")
         .arg(&out)
-        .arg("-lEthersync")
+        .arg("-lTidkod")
         .args([
             "-Xlinker",
             "-rpath",
@@ -80,9 +80,9 @@ pub fn build(sdk: &Path, native: bool, rust_target: &str) {
         ])
         .arg(sdk.join("swift-example/main.swift"))
         .arg("-o")
-        .arg(out.join("EthersyncSmoke"));
+        .arg(out.join("TidkodSmoke"));
     if native {
-        smoke.args(["-D", "ETHERSYNC_NATIVE"]);
+        smoke.args(["-D", "TIDKOD_NATIVE"]);
     }
     run(&mut smoke);
 }

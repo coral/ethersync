@@ -21,7 +21,7 @@ jobs:
       - run: cargo doc --workspace --no-deps --locked
         env:
           RUSTDOCFLAGS: -D warnings
-      - run: cargo package -p ethersync-protocol --locked
+      - run: cargo package -p tidkod-protocol --locked
       - run: python scripts/check_release.py
       - run: python -m unittest discover -s scripts/tests -v
       - run: python scripts/smoke_examples.py
@@ -36,7 +36,7 @@ jobs:
           actionlint
           buf lint
           buf format --diff --exit-code
-          buf build -o "$RUNNER_TEMP/ethersync-descriptor.bin"
+          buf build -o "$RUNNER_TEMP/tidkod-descriptor.bin"
           python scripts/generate_docs.py --check
   web:
     runs-on: ubuntu-22.04

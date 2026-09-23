@@ -13,13 +13,13 @@ existing user edits. Put documentation updates in appropriate files under
 
 ## Repository layout
 
-Ethersync provides LAN timecode synchronization with native and browser clients.
+Tidkod provides LAN timecode synchronization with native and browser clients.
 The Rust workspace uses edition 2024 and Cargo resolver 3.
 
-- `protocol/` (`ethersync-protocol`): protobuf schema, wire validation, exact
+- `protocol/` (`tidkod-protocol`): protobuf schema, wire validation, exact
   timecode arithmetic, clock estimation, timelines, tracking, and shared timing
   APIs. Both native and WASM clients use this core.
-- `native/` (`libethersync`): public native API, engine worker, discovery,
+- `native/` (`tidkod`): public native API, engine worker, discovery,
   networking, leaders, followers, and readers. Its internal `src/transport/`
   module drives QUIC/WebTransport/MoQ explicitly without an executor.
 - `native/examples/`: leader, follower, and tracked playback examples.
@@ -44,7 +44,7 @@ The Rust workspace uses edition 2024 and Cargo resolver 3.
 - Treat clock uncertainty, timeline correction, and presentation latency as
   separate quantities. Do not claim physical-network or display accuracy from
   simulation results or estimator diagnostics alone.
-- `protocol/proto/ethersync/v1/ethersync.proto` is the schema source. Preserve
+- `protocol/proto/tidkod/v1/tidkod.proto` is the schema source. Preserve
   compatibility and golden fixtures unless a protocol change is intentional.
 - `clients/bindings/src/api.rs` defines the foreign API. Update the generators
   (`build.rs`, `wrappers.rs`, `cpp.rs`, `csharp.rs`) and templates when needed; do not patch
@@ -57,7 +57,7 @@ The Rust workspace uses edition 2024 and Cargo resolver 3.
 ## Generated files and dependencies
 
 - Cargo output and generated bindings belong under `target/`, including
-  `ethersync-generated/native` and `ethersync-generated/core` beside artifacts.
+  `tidkod-generated/native` and `tidkod-generated/core` beside artifacts.
 - SDK packages normally go under `dist/`. WASM glue goes to `web/pkg/` and
   `web/pkg-node/`; the local wasm-bindgen tool goes to `web/.tools/`.
 - Respect `.gitignore` and `web/.gitignore`. Do not force-add build artifacts,
@@ -102,7 +102,7 @@ pnpm --dir web build
 Tests and builds regenerate WASM and require the `wasm32-unknown-unknown` Rust
 target. The build script may install its pinned wasm-bindgen CLI.
 
-For binding changes, build `ethersync-bindings` and exercise the affected
+For binding changes, build `tidkod-bindings` and exercise the affected
 language consumers. Use `.github/workflows/native.yml` as the reference for
 native/core packaging, CMake/CTest, .NET, and macOS Swift checks. Apple packaging
 uses `scripts/build-apple-sdk.sh`; keep deployment targets consistent with
@@ -111,7 +111,7 @@ uses `scripts/build-apple-sdk.sh`; keep deployment targets consistent with
 The ignored mDNS integration test requires a multicast-capable interface:
 
 ```sh
-cargo test -p libethersync --locked --test mdns -- --ignored --nocapture
+cargo test -p tidkod --locked --test mdns -- --ignored --nocapture
 ```
 
 Report multicast/network failures separately from direct QUIC results. See
@@ -122,9 +122,9 @@ README files and unrelated user changes were not altered by your work.
 ## Releases and SDK checks
 
 - Read `docs/releasing.md` before changing packaging or release workflows.
-- The Rust package and import are `libethersync`; foreign library filenames
-  remain `ethersync_bindings`. C, C++, and C# share its exported C ABI.
-- Only `ethersync-protocol` and `libethersync` may be published to crates.io.
+- The Rust package and import are `tidkod`; foreign library filenames
+  remain `tidkod_bindings`. C, C++, and C# share its exported C ABI.
+- Only `tidkod-protocol` and `tidkod` may be published to crates.io.
   Registry publishing is gated off in `release.toml` pending upstream MoQ.
 - Use `scripts/sdk.py` to build and test archived native/core SDKs. Consumer
   checks must exercise optimized shared libraries as well as static libraries.

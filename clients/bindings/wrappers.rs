@@ -85,7 +85,7 @@ pub fn generate(
     ];
     if std::env::var_os("CARGO_FEATURE_SWIFT").is_some() {
         let mut s = String::from(
-            "// Generated; do not edit.\nimport EthersyncSys\nimport Foundation\npublic struct EthersyncError: Error, CustomStringConvertible { public let description: String }\nprivate func checked<T>(_ body: () throws -> T) throws -> T { do { return try body() } catch let error as RustString { throw EthersyncError(description: error.toString()) } catch { throw error } }\n",
+            "// Generated; do not edit.\nimport TidkodSys\nimport Foundation\npublic struct TidkodError: Error, CustomStringConvertible { public let description: String }\nprivate func checked<T>(_ body: () throws -> T) throws -> T { do { return try body() } catch let error as RustString { throw TidkodError(description: error.toString()) } catch { throw error } }\n",
         );
         for (name, _, variants) in &enums {
             s += &format!("public enum {name}: UInt8 {{\n");
@@ -95,7 +95,7 @@ pub fn generate(
             s += "case unknown = 255\n}\n";
         }
         for (name, fields) in records {
-            s += &format!("public struct {name} {{ fileprivate let raw: EthersyncSys.{name}\n");
+            s += &format!("public struct {name} {{ fileprivate let raw: TidkodSys.{name}\n");
             for (n, t) in fields {
                 if let Some((kind, _, _)) = enums
                     .iter()
@@ -125,7 +125,7 @@ pub fn generate(
                 "final class"
             };
             s += &format!(
-                "/// Owned handle. Serialize access; this type is deliberately not Sendable.\npublic {declaration} {t} {{ fileprivate let raw: EthersyncSys.{t}\nfileprivate init(raw: EthersyncSys.{t}) {{ self.raw = raw }}\n"
+                "/// Owned handle. Serialize access; this type is deliberately not Sendable.\npublic {declaration} {t} {{ fileprivate let raw: TidkodSys.{t}\nfileprivate init(raw: TidkodSys.{t}) {{ self.raw = raw }}\n"
             );
             for f in functions
                 .iter()
@@ -181,7 +181,7 @@ pub fn generate(
                     .collect::<Vec<_>>()
                     .join(", ");
                 let mut expr = format!(
-                    "{}EthersyncSys.{name}({callargs})",
+                    "{}TidkodSys.{name}({callargs})",
                     if fallible { "try " } else { "" }
                 );
                 if let Some((n, _)) = a_rest.iter().find(|(_, ty)| ty == "&[u8]") {
@@ -219,28 +219,28 @@ pub fn generate(
         if opaque.contains("Endpoint") {
             s += include_str!("templates/Endpoint.swift");
         }
-        fs::write(dir.join("EthersyncClient.swift"), s).unwrap();
+        fs::write(dir.join("TidkodClient.swift"), s).unwrap();
     }
     if std::env::var_os("CARGO_FEATURE_CPP").is_some() {
         super::cpp::generate(dir, opaque, records, functions);
     }
     if std::env::var_os("CARGO_FEATURE_C").is_some() {
         let mut s = String::from(
-            "/* Generated; owned structs must not be copied. */\n#ifndef ETHERSYNC_CLIENT_H\n#define ETHERSYNC_CLIENT_H\n#include \"ethersync.h\"\n#include <string.h>\n",
+            "/* Generated; owned structs must not be copied. */\n#ifndef TIDKOD_CLIENT_H\n#define TIDKOD_CLIENT_H\n#include \"tidkod.h\"\n#include <string.h>\n",
         );
         for t in opaque {
             s += &format!(
-                "typedef struct {{ {t} *raw; }} Es{t};\nstatic inline void es_{}_dispose(Es{t} *v) {{ ethersync_{}_free(v->raw); v->raw = NULL; }}\n",
+                "typedef struct {{ {t} *raw; }} TK{t};\nstatic inline void tk_{}_dispose(TK{t} *v) {{ tidkod_{}_free(v->raw); v->raw = NULL; }}\n",
                 snake(t),
                 t.to_lowercase()
             );
         }
-        s += "typedef struct { const uint8_t *data; size_t len; } EsBytes;\nstatic inline void es_buffer_dispose(EsBuffer **value) { ethersync_buffer_free(*value); *value = NULL; }\nstatic inline EsBytes es_buffer_view(const EsBuffer *value) { EsBytes bytes = {ethersync_buffer_data(value), ethersync_buffer_len(value)}; return bytes; }\n";
+        s += "typedef struct { const uint8_t *data; size_t len; } TKBytes;\nstatic inline void tk_buffer_dispose(TKBuffer **value) { tidkod_buffer_free(*value); *value = NULL; }\nstatic inline TKBytes tk_buffer_view(const TKBuffer *value) { TKBytes bytes = {tidkod_buffer_data(value), tidkod_buffer_len(value)}; return bytes; }\n";
         let ty = |t: &str| {
             if opaque.contains(t) {
-                format!("Es{t}")
+                format!("TK{t}")
             } else if t == "String" || t == "Vec<u8>" {
-                "EsBuffer *".into()
+                "TKBuffer *".into()
             } else {
                 scalar(t, false)
             }
@@ -248,7 +248,7 @@ pub fn generate(
         let returns: BTreeSet<_> = functions.iter().map(|f| output(f).0).collect();
         for t in returns {
             s += &format!(
-                "typedef struct {{ int32_t status; EsBuffer *error; {} }} EsResult{};\n",
+                "typedef struct {{ int32_t status; TKBuffer *error; {} }} TKResult{};\n",
                 if t == "()" {
                     String::new()
                 } else {
@@ -261,7 +261,7 @@ pub fn generate(
             let name = f.sig.ident.to_string();
             let a = args(f);
             let (ret, _) = output(f);
-            let result = format!("EsResult{}", suffix(&ret));
+            let result = format!("TKResult{}", suffix(&ret));
             let decl = a
                 .iter()
                 .map(|(n, t)| {
@@ -270,7 +270,7 @@ pub fn generate(
                         if t == "&str" {
                             "const char *".into()
                         } else if t == "&[u8]" {
-                            "EsBytes".into()
+                            "TKBytes".into()
                         } else {
                             ty(base(t))
                         }
@@ -301,12 +301,12 @@ pub fn generate(
             }
             callargs.push("&result.error".into());
             s += &format!(
-                "static inline {result} es_{name}({}) {{ {result} result = {{0}}; result.status = ethersync_{name}({}); return result; }}\n",
+                "static inline {result} tk_{name}({}) {{ {result} result = {{0}}; result.status = tidkod_{name}({}); return result; }}\n",
                 if decl.is_empty() { "void" } else { &decl },
                 callargs.join(", ")
             );
         }
         s += "#endif\n";
-        fs::write(dir.join("ethersync-client.h"), s).unwrap();
+        fs::write(dir.join("tidkod-client.h"), s).unwrap();
     }
 }

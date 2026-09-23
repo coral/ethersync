@@ -35,7 +35,7 @@ fn moq_lite_handshake_and_track_without_executor() {
         moq::origin::Producer::new(moq::origin::Config::new(moq::Hop::new(1).unwrap()));
     let (sink, mut sink_driver) =
         moq::origin::Producer::new(moq::origin::Config::new(moq::Hop::new(2).unwrap()));
-    let broadcast = source.create_broadcast("ethersync/v1").unwrap();
+    let broadcast = source.create_broadcast("tidkod/v1").unwrap();
     let mut track = broadcast.create_track("state", None).unwrap();
     track
         .write_frame(
@@ -53,11 +53,7 @@ fn moq_lite_handshake_and_track_without_executor() {
     let mut client_session = None;
     let mut server_session = None;
     let receive = async {
-        let broadcast = sink
-            .consume()
-            .routed_broadcast("ethersync/v1")
-            .await
-            .unwrap();
+        let broadcast = sink.consume().routed_broadcast("tidkod/v1").await.unwrap();
         let mut track = broadcast
             .track("state")
             .unwrap()

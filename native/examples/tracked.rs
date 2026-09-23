@@ -1,7 +1,7 @@
 //! Simulated external source: jitter, input loss, pause, and reverse playback.
 mod common;
-use libethersync::*;
 use std::time::{Duration, Instant};
+use tidkod::*;
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = common::args();
     if args.contains_key("--help") {

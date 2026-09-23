@@ -1,11 +1,11 @@
 //! Select a discovered leader or specify a direct socket address.
 mod common;
 mod terminal;
-use libethersync::*;
 use std::{
     io::IsTerminal,
     time::{Duration, Instant},
 };
+use tidkod::*;
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = common::args();
     if args.contains_key("--help") {

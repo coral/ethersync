@@ -1,24 +1,24 @@
 //! Direct LAN timecode synchronization with synchronous handles.
 //!
 //! ```no_run
-//! use libethersync::{Engine, LeaderConfig};
+//! use tidkod::{Engine, LeaderConfig};
 //! let engine = Engine::new()?;
 //! let leader = engine.leader(LeaderConfig::default())?;
 //! leader.play()?;
 //! let mut reader = leader.reader()?;
 //! println!("{}", reader.read().label());
 //! engine.shutdown()?;
-//! # Ok::<(), libethersync::Error>(())
+//! # Ok::<(), tidkod::Error>(())
 //! ```
-pub use ethersync_protocol::{Boundary, BoundaryKind, FrameFormat, Label, Position, Rate};
+pub use tidkod_protocol::{Boundary, BoundaryKind, FrameFormat, Label, Position, Rate};
 mod api;
-pub use ethersync_protocol::clock;
+pub use tidkod_protocol::clock;
 mod discovery;
 mod network;
 pub use api::*;
 pub use discovery::*;
-use ethersync_protocol::timeline;
-use ethersync_protocol::tracking;
+use tidkod_protocol::timeline;
+use tidkod_protocol::tracking;
 pub use timeline::{
     ConnectionState, Correction, CorrectionPolicy, Reading, SourceHealth, SourceKind, Status,
     SyncState, TimecodeSnapshot,
@@ -34,7 +34,7 @@ pub enum Error {
     #[error("reader capacity reached")]
     ReaderLimit,
     #[error("protocol: {0}")]
-    Protocol(#[from] ethersync_protocol::Error),
+    Protocol(#[from] tidkod_protocol::Error),
     #[error("I/O: {0}")]
     Io(#[from] std::io::Error),
     #[error("transport: {0}")]

@@ -1,5 +1,5 @@
-use libethersync::*;
 use std::time::{Duration, Instant};
+use tidkod::*;
 
 #[test]
 fn frozen_state_survives_refresh_shutdown_and_owner_destruction() {

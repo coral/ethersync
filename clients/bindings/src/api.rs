@@ -1,8 +1,8 @@
 //! The sole foreign API definition. Bridge declarations and adapters are generated
 //! from these public structs and functions by build.rs.
-use ethersync_protocol::{self as protocol, timeline};
+use tidkod_protocol::{self as protocol, timeline};
 #[cfg(feature = "native")]
-use ethersync_protocol::{FrameFormat, Position, Rate};
+use tidkod_protocol::{FrameFormat, Position, Rate};
 type Result<T> = std::result::Result<T, String>;
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
@@ -222,40 +222,40 @@ pub fn core_snapshot_into(core: &Core, snapshot: &mut TimecodeSnapshot) {
 
 #[cfg(feature = "native")]
 pub struct Engine {
-    inner: std::sync::Arc<libethersync::Engine>,
+    inner: std::sync::Arc<tidkod::Engine>,
 }
 #[cfg(feature = "native")]
 pub struct LeaderOptions {
-    inner: libethersync::LeaderConfig,
+    inner: tidkod::LeaderConfig,
 }
 #[cfg(feature = "native")]
 pub struct FollowerOptions {
-    inner: libethersync::FollowerConfig,
+    inner: tidkod::FollowerConfig,
 }
 #[cfg(feature = "native")]
 pub struct Leader {
-    inner: libethersync::Leader,
-    _engine: std::sync::Arc<libethersync::Engine>,
+    inner: tidkod::Leader,
+    _engine: std::sync::Arc<tidkod::Engine>,
 }
 #[cfg(feature = "native")]
 pub struct Follower {
-    inner: libethersync::Follower,
-    _engine: std::sync::Arc<libethersync::Engine>,
+    inner: tidkod::Follower,
+    _engine: std::sync::Arc<tidkod::Engine>,
 }
 #[cfg(feature = "native")]
 pub struct Reader {
-    inner: libethersync::TimecodeReader,
+    inner: tidkod::TimecodeReader,
 }
 #[cfg(feature = "native")]
 pub struct Discovery {
-    inner: libethersync::Discovery,
-    _engine: std::sync::Arc<libethersync::Engine>,
-    leaders: Vec<libethersync::DiscoveredLeader>,
+    inner: tidkod::Discovery,
+    _engine: std::sync::Arc<tidkod::Engine>,
+    leaders: Vec<tidkod::DiscoveredLeader>,
 }
 #[cfg(feature = "native")]
 pub fn engine_new() -> Result<Engine> {
     Ok(Engine {
-        inner: std::sync::Arc::new(libethersync::Engine::new().map_err(error)?),
+        inner: std::sync::Arc::new(tidkod::Engine::new().map_err(error)?),
     })
 }
 #[cfg(feature = "native")]
@@ -302,9 +302,9 @@ pub fn leader_options_format(
 #[cfg(feature = "native")]
 pub fn leader_options_tracked(options: &mut LeaderOptions, tracked: bool) {
     options.inner.source_kind = if tracked {
-        libethersync::SourceKind::Tracked
+        tidkod::SourceKind::Tracked
     } else {
-        libethersync::SourceKind::Generated
+        tidkod::SourceKind::Generated
     };
 }
 #[cfg(feature = "native")]
@@ -376,7 +376,7 @@ pub fn leader_track(
 ) -> Result<()> {
     leader
         .inner
-        .track(libethersync::SourceSample {
+        .track(tidkod::SourceSample {
             position: Position { frames, subframe },
             timestamp_ns,
             rate_hint: if has_rate {
@@ -401,7 +401,7 @@ pub fn leader_shutdown(leader: &Leader) -> Result<()> {
 #[cfg(feature = "native")]
 pub fn follower_options_new(address: &str) -> Result<FollowerOptions> {
     Ok(FollowerOptions {
-        inner: libethersync::FollowerConfig::direct(address.parse().map_err(error)?),
+        inner: tidkod::FollowerConfig::direct(address.parse().map_err(error)?),
     })
 }
 #[cfg(feature = "native")]
@@ -412,9 +412,9 @@ pub fn follower_options_bind(options: &mut FollowerOptions, address: &str) -> Re
 #[cfg(feature = "native")]
 pub fn follower_options_pin(options: &mut FollowerOptions, fingerprint: &str) {
     options.inner.trust = if fingerprint.is_empty() {
-        libethersync::Trust::TrustedLan
+        tidkod::Trust::TrustedLan
     } else {
-        libethersync::Trust::Pinned(fingerprint.into())
+        tidkod::Trust::Pinned(fingerprint.into())
     };
 }
 #[cfg(feature = "native")]
@@ -586,9 +586,9 @@ fn timing(
     connect_timeout_ns: u64,
     retry_min_ns: u64,
     retry_max_ns: u64,
-) -> libethersync::Timing {
+) -> tidkod::Timing {
     use std::time::Duration as D;
-    libethersync::Timing {
+    tidkod::Timing {
         acquisition_probe: D::from_nanos(acquisition_ns),
         steady_probe: D::from_nanos(steady_ns),
         heartbeat: D::from_nanos(heartbeat_ns),
@@ -707,7 +707,7 @@ pub fn discovery_shutdown(discovery: &mut Discovery) -> Result<()> {
 /// 4 source health, 5 error. Event strings are separate from the reading path.
 #[cfg(feature = "native")]
 pub struct Event {
-    inner: Option<libethersync::Event>,
+    inner: Option<tidkod::Event>,
 }
 #[cfg(feature = "native")]
 #[repr(C)]
@@ -749,11 +749,11 @@ pub fn event_data(event: &Event) -> EventData {
     let mut data = EventData::default();
     match &event.inner {
         None => {}
-        Some(libethersync::Event::Connection(state)) => {
+        Some(tidkod::Event::Connection(state)) => {
             data.kind = 1;
             data.state = *state as u8;
         }
-        Some(libethersync::Event::Correction(c)) => {
+        Some(tidkod::Event::Correction(c)) => {
             data.kind = 2;
             match c {
                 timeline::Correction::Discontinuity(d) => {
@@ -771,7 +771,7 @@ pub fn event_data(event: &Event) -> EventData {
                 timeline::Correction::NewSession => data.correction_kind = 4,
             }
         }
-        Some(libethersync::Event::ClockObservation(o)) => {
+        Some(tidkod::Event::ClockObservation(o)) => {
             data.kind = 3;
             data.t1 = o.exchange.t1;
             data.t2 = o.exchange.t2;
@@ -786,12 +786,12 @@ pub fn event_data(event: &Event) -> EventData {
             data.uncertainty_ns = o.mapping.uncertainty_ns;
             data.accepted_observations = o.mapping.accepted_observations;
         }
-        Some(libethersync::Event::SourceHealth(health)) => {
+        Some(tidkod::Event::SourceHealth(health)) => {
             data.kind = 4;
             data.state = *health as u8;
         }
-        Some(libethersync::Event::Error(_)) => data.kind = 5,
-        Some(libethersync::Event::ProbeTiming { lateness_ns }) => {
+        Some(tidkod::Event::Error(_)) => data.kind = 5,
+        Some(tidkod::Event::ProbeTiming { lateness_ns }) => {
             data.kind = 6;
             data.probe_lateness_ns = *lateness_ns;
         }
@@ -801,7 +801,7 @@ pub fn event_data(event: &Event) -> EventData {
 #[cfg(feature = "native")]
 pub fn event_message(event: &Event) -> String {
     match &event.inner {
-        Some(libethersync::Event::Error(e)) => e.clone(),
+        Some(tidkod::Event::Error(e)) => e.clone(),
         _ => String::new(),
     }
 }
@@ -811,7 +811,7 @@ pub fn follower_options_diagnostics(options: &mut FollowerOptions, enabled: bool
 }
 #[cfg(feature = "native")]
 pub struct DiscoveryOptions {
-    inner: libethersync::DiscoveryConfig,
+    inner: tidkod::DiscoveryConfig,
 }
 #[cfg(feature = "native")]
 pub fn discovery_options_new() -> DiscoveryOptions {
@@ -860,7 +860,7 @@ pub fn follower_options_discovered(
         .get(address_index as usize)
         .ok_or("address index")?;
     Ok(FollowerOptions {
-        inner: libethersync::FollowerConfig::discovered(leader, address).map_err(error)?,
+        inner: tidkod::FollowerConfig::discovered(leader, address).map_err(error)?,
     })
 }
 /// Configure a runtime-free follower before processing packets. Rejects invalid
@@ -982,7 +982,7 @@ pub fn follower_options_endpoint(endpoint: &Endpoint) -> Result<FollowerOptions>
         return Err("a follower needs a concrete IP address and nonzero port".into());
     }
     Ok(FollowerOptions {
-        inner: libethersync::FollowerConfig::direct(endpoint.inner),
+        inner: tidkod::FollowerConfig::direct(endpoint.inner),
     })
 }
 #[cfg(feature = "native")]

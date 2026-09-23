@@ -1,7 +1,7 @@
 //! Exercises the leader's browser-facing HTTP/3 endpoint, without a browser.
-use ethersync_protocol::{decode_probe, decode_snapshot, probes::Probes};
-use libethersync::{Engine, LeaderConfig};
 use std::time::{Duration, Instant};
+use tidkod::{Engine, LeaderConfig};
+use tidkod_protocol::{decode_probe, decode_snapshot, probes::Probes};
 
 #[test]
 fn http3_state_and_private_datagrams_with_pinning() {
@@ -25,7 +25,7 @@ fn http3_state_and_private_datagrams_with_pinning() {
             let ingest = origin();
             let mut b = publish
                 .create_broadcast(
-                    "ethersync/v1",
+                    "tidkod/v1",
                     moq_net::broadcast::Route::new().with_announce(true),
                 )
                 .unwrap();
@@ -46,7 +46,7 @@ fn http3_state_and_private_datagrams_with_pinning() {
             assert_eq!(session.version(), version);
             let incoming = ingest
                 .consume()
-                .announced_broadcast("ethersync/v1")
+                .announced_broadcast("tidkod/v1")
                 .await
                 .unwrap();
             let mut states = incoming

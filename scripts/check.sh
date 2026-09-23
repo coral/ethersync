@@ -7,6 +7,6 @@ cargo test --workspace --locked
 RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
 buf lint
 buf format --diff --exit-code
-buf build -o /tmp/ethersync-descriptor.bin
+buf build -o /tmp/tidkod-descriptor.bin
 python3 scripts/generate_docs.py --check
 python3 scripts/smoke_examples.py

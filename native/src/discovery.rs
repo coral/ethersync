@@ -4,7 +4,7 @@ use std::{
     net::{IpAddr, SocketAddr, SocketAddrV6},
     time::Duration,
 };
-pub const SERVICE_TYPE: &str = "_ethersync._udp.local.";
+pub const SERVICE_TYPE: &str = "_tidkod._udp.local.";
 
 pub(crate) fn local_endpoints(
     bind: SocketAddr,
@@ -193,7 +193,7 @@ impl Advertisement {
             ("transport", "moq-lite-05"),
         ];
         // Unique stable identity suffix permits duplicate display names without conflating leaders.
-        let host = format!("ethersync-{}.local.", uuid::Uuid::from_bytes(info.session));
+        let host = format!("tidkod-{}.local.", uuid::Uuid::from_bytes(info.session));
         let mut display_name = c.name.clone();
         while display_name.len() > 54 {
             display_name.pop();

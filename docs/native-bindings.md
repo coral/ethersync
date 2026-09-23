@@ -29,14 +29,14 @@ manually polled futures; no async executor is started. The local timer registry
 also drives WebTransport rejection grace periods.
 
 Tokio remains a transitive compiled utility dependency of upstream `web-async`
-and `web-transport-proto` (the latter uses I/O traits). Ethersync does not construct
+and `web-transport-proto` (the latter uses I/O traits). Tidkod does not construct
 or enter a Tokio runtime; no runtime is required from C, C++, or Swift callers.
 Published Tokio-based MoQ libraries are dev dependencies used as independent
 interoperability peers. Verify the distinction with:
 
 ```sh
-cargo tree -p libethersync -e normal -i tokio
-cargo tree -p ethersync-bindings --no-default-features --features c,cpp,swift -e normal
+cargo tree -p tidkod -e normal -i tokio
+cargo tree -p tidkod-bindings --no-default-features --features c,cpp,swift -e normal
 ```
 
 The second tree contains no Tokio, MoQ, QUIC, TLS, or discovery dependencies.
@@ -145,8 +145,8 @@ and `engine_worker_timing`.
 Reproduce the load test with:
 
 ```sh
-cargo test -p libethersync --test poll_worker -- --nocapture
-cargo test -p libethersync --test poll_worker probe_deadline_tails_with_discovery -- --ignored --nocapture
+cargo test -p tidkod --test poll_worker -- --nocapture
+cargo test -p tidkod --test poll_worker probe_deadline_tails_with_discovery -- --ignored --nocapture
 ```
 
 The first review run with 15 followers, 100 Hz control changes, and periodic
@@ -160,13 +160,13 @@ load test's 500 ms guard detects starvation, not compliance with a real-time SLA
 ## Shared-library SDKs
 
 C and C++ use the same exported C ABI as C#. The generated C++ convenience
-header is `ethersync-client.hpp`, in namespace `ethersync::client`; it owns C
+header is `tidkod-client.hpp`, in namespace `tidkod::client`; it owns C
 handles with move-only RAII and exposes explicit `Result<T>` errors. It does not
 require CXX or a C++ runtime ABI across the library boundary. Qualify wrapper
 classes with that namespace to distinguish them from the opaque C handle types.
-The old CXX-specific `ethersync.hpp` API has been removed.
+The old CXX-specific `tidkod.hpp` API has been removed.
 
-Packaged CMake targets are `Ethersync::shared` and `Ethersync::static`; the
-`ethersync` alias selects shared linking. `ETHERSYNC_BUILD_EXAMPLES=OFF` disables
+Packaged CMake targets are `Tidkod::shared` and `Tidkod::static`; the
+`tidkod` alias selects shared linking. `TIDKOD_BUILD_EXAMPLES=OFF` disables
 packaged consumer tests when integrating the SDK with `add_subdirectory`.
 See [releasing](releasing.md) for the platform matrix and archive validation.

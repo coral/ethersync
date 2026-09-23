@@ -1,5 +1,5 @@
 import * as Moq from '@moq/net';
-import type { Follower } from '../pkg/ethersync_wasm';
+import type { Follower } from '../pkg/tidkod_wasm';
 
 export interface Diagnostics {
   message: string;
@@ -32,7 +32,7 @@ function reason(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-// Only transport orchestration belongs here. WASM owns all Ethersync message parsing,
+// Only transport orchestration belongs here. WASM owns all Tidkod message parsing,
 // probe matching, clock fitting, stale-state rejection, corrections and extrapolation.
 export async function follow(
   core: Follower, url: URL, pin: string, signal: AbortSignal,
@@ -59,10 +59,10 @@ export async function follow(
       });
       if (signal.aborted) break;
       if (connection.version !== 'moq-lite-05') throw new Error(`Unsupported MoQ version: ${connection.version}`);
-      connection.publish(Moq.Path.from('ethersync/v1'), broadcast);
+      connection.publish(Moq.Path.from('tidkod/v1'), broadcast);
       core.connected();
       backoff = 100;
-      incoming = connection.consume(Moq.Path.from('ethersync/v1'));
+      incoming = connection.consume(Moq.Path.from('tidkod/v1'));
       states = incoming.subscribe('state');
       replies = incoming.subscribe('clock/reply');
       const conn = connection;

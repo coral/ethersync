@@ -1,5 +1,5 @@
-#ifndef ETHERSYNC_EXAMPLE_CHECK_H
-#define ETHERSYNC_EXAMPLE_CHECK_H
+#ifndef TIDKOD_EXAMPLE_CHECK_H
+#define TIDKOD_EXAMPLE_CHECK_H
 #include <stdio.h>
 #include <stdlib.h>
 #define CHECK(condition) do { if (!(condition)) { \

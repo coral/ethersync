@@ -93,7 +93,7 @@ impl Default for LeaderConfig {
     fn default() -> Self {
         Self {
             bind: "0.0.0.0:0".parse().unwrap(),
-            name: "Ethersync".into(),
+            name: "Tidkod".into(),
             identity: uuid::Uuid::new_v4().to_string(),
             format: FrameFormat::default(),
             position: Position::ZERO,
@@ -144,7 +144,7 @@ impl FollowerConfig {
     }
     pub fn discovered(leader: &DiscoveredLeader, address: SocketAddr) -> Result<Self> {
         if leader.protocol_version != 1 {
-            return Err(Error::Protocol(ethersync_protocol::Error::Version(
+            return Err(Error::Protocol(tidkod_protocol::Error::Version(
                 leader.protocol_version,
             )));
         }
@@ -253,7 +253,7 @@ impl Engine {
         let notify = signal.clone();
         let clock = MonotonicClock(Instant::now());
         let thread = thread::Builder::new()
-            .name("ethersync".into())
+            .name("tidkod".into())
             .spawn(move || {
                 let _ = worker::run(poll, rx, stopped, notify);
             })?;
@@ -565,7 +565,7 @@ impl Drop for Control {
         self.signal.notify();
     }
 }
-pub use ethersync_protocol::SourceSample;
+pub use tidkod_protocol::SourceSample;
 pub(crate) enum Change {
     Rate(Rate),
     Seek(Position),

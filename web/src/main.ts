@@ -1,4 +1,4 @@
-import init, { Follower } from '../pkg/ethersync_wasm';
+import init, { Follower } from '../pkg/tidkod_wasm';
 import { endpoint, fingerprint, follow, type Diagnostics } from './transport';
 import './style.css';
 import { instrument } from './trace';
@@ -30,7 +30,7 @@ try {
   const core = capture.follower;
   element('export-trace').addEventListener('click', () => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(capture.export())], { type: 'application/json' }));
-    const a = document.createElement('a'); a.href = url; a.download = 'ethersync-timing.json'; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = 'tidkod-timing.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   if (!window.isSecureContext || !('WebTransport' in window)) {

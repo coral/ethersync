@@ -1,5 +1,5 @@
 syntax = "proto3";
-package ethersync.v1;
+package tidkod.v1;
 
 // Source provenance does not change when external input disappears.
 enum SourceKind {

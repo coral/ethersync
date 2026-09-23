@@ -1,6 +1,6 @@
 #![allow(dead_code)]
-use libethersync::*;
 use std::{collections::BTreeMap, io::BufRead, time::Duration};
+use tidkod::*;
 pub fn args() -> BTreeMap<String, String> {
     let mut result = BTreeMap::new();
     let mut args = std::env::args().skip(1).peekable();

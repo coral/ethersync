@@ -1,10 +1,10 @@
-# Ethersync native bindings
+# Tidkod native bindings
 
 `src/api.rs` is the single foreign API definition and implementation. `build.rs`
 parses it with `syn`, rejects unsupported types, generates the adapters, and runs
 `cbindgen`, `cxx-build`, `swift-bridge-build`, and `csbindgen`. No Python or Node is involved.
 Generated files live beside the Cargo library under
-`ethersync-generated/native` or `ethersync-generated/core`. `API.txt` lists the
+`tidkod-generated/native` or `tidkod-generated/core`. `API.txt` lists the
 available signatures. Generated Swift functions throw on Rust errors; C++ uses
 explicit outcome handles and builds with exceptions disabled.
 
@@ -14,10 +14,10 @@ Normal applications use the generated client layer:
 
 | Language | Application layer | Low-level bridge |
 | --- | --- | --- |
-| Swift | `import Ethersync`: owned classes, methods, typed statuses, native strings/arrays, errors | `EthersyncSys` |
-| C++ | `ethersync-client.hpp`: `ethersync::client` classes and `Result<T>` | `ethersync.hpp` |
-| C# | `Ethersync`: disposable classes, typed readings, .NET endpoints, managed exceptions | internal `Ethersync.Sys` P/Invoke |
-| C | `ethersync-client.h`: `EsEngine`/`EsLeader` handles and typed result structs | `ethersync.h` |
+| Swift | `import Tidkod`: owned classes, methods, typed statuses, native strings/arrays, errors | `TidkodSys` |
+| C++ | `tidkod-client.hpp`: `tidkod::client` classes and `Result<T>` | `tidkod.hpp` |
+| C# | `Tidkod`: disposable classes, typed readings, .NET endpoints, managed exceptions | internal `Tidkod.Sys` P/Invoke |
+| C | `tidkod-client.h`: `EsEngine`/`EsLeader` handles and typed result structs | `tidkod.h` |
 
 `wrappers.rs` generates all facade methods from the same Rust signatures as the
 bridges. Names such as `engine_follower(&Engine, ...)` become instance methods;
@@ -28,7 +28,7 @@ the sys module. Configuration handles are mutable builders, not copyable value
 configurations.
 
 ```swift
-import Ethersync
+import Tidkod
 
 let engine = try Engine()
 let options = try FollowerOptions(endpoint: .loopback(port: 4443))
@@ -62,27 +62,27 @@ The runnable `examples/client.swift`, `client.cpp`, and `client.c` exercise thes
 application APIs. `main.swift` and `smoke.*` remain lower-level ABI tests.
 
 ```sh
-cargo build -p ethersync-bindings
+cargo build -p tidkod-bindings
 # Runtime/network-free variant, in a separate artifact directory:
-cargo build -p ethersync-bindings --no-default-features --features c,cpp,swift --target-dir target/core
+cargo build -p tidkod-bindings --no-default-features --features c,cpp,swift --target-dir target/core
 ```
 
 The native variant provides engines, generated/tracked leaders, followers,
 discovery, transport controls, readers, and configuration. The core variant only
-requires ethersync-protocol: supply snapshots, four-timestamp probes, connection
+requires tidkod-protocol: supply snapshots, four-timestamp probes, connection
 changes, and monotonic nanoseconds. Neither API exposes Tokio, protobuf, or MoQ.
 Core objects never start threads. A native engine owns one socket worker;
 optional mDNS additionally owns its daemon thread. Clients do not start or poll a
 runtime. The current pinned upstream MoQ dependency still compiles Tokio utility
-code transitively; Ethersync does not construct or enter a Tokio runtime.
+code transitively; Tidkod does not construct or enter a Tokio runtime.
 
 ## Ownership and calling rules
 
 C functions return 0 on success, 1 on error, 2 on a caught Rust panic. Outputs are
 valid only after success. Initialize pointer outputs to NULL. An optional final
 error pointer receives an owned UTF-8 `EsBuffer`; free it with
-`ethersync_buffer_free`. Buffers are length-delimited, not NUL-terminated.
-Use each generated `ethersync_<type>_free` exactly once per successful constructor.
+`tidkod_buffer_free`. Buffers are length-delimited, not NUL-terminated.
+Use each generated `tidkod_<type>_free` exactly once per successful constructor.
 NULL is accepted by free functions. Input spans are borrowed for the call.
 Non-null pointers must be valid, correctly typed, and not already freed.
 
@@ -109,20 +109,20 @@ Build the bindings first. Packaging consumes completed artifacts and never invok
 Cargo recursively. Use separate Cargo target directories for native/core variants.
 
 ```sh
-ETHERSYNC_SDK_ARTIFACTS="$PWD/target/debug" ETHERSYNC_SDK_OUT="$PWD/dist" \
-  cargo build -p ethersync-sdk
-ETHERSYNC_SDK_VARIANT=core ETHERSYNC_SDK_ARTIFACTS="$PWD/target/core/debug" \
-  ETHERSYNC_SDK_OUT="$PWD/dist" cargo build -p ethersync-sdk
+TIDKOD_SDK_ARTIFACTS="$PWD/target/debug" TIDKOD_SDK_OUT="$PWD/dist" \
+  cargo build -p tidkod-sdk
+TIDKOD_SDK_VARIANT=core TIDKOD_SDK_ARTIFACTS="$PWD/target/core/debug" \
+  TIDKOD_SDK_OUT="$PWD/dist" cargo build -p tidkod-sdk
 ```
 
 The SDK contains libraries, generated C/C++/Swift sources and headers, CMake
 consumption examples, and a buildable Rust source distribution with the pinned
 lockfile. From the SDK directory: `cmake -S . -B build`, `cmake --build build`,
 `ctest --test-dir build`. Swift: compile `include/SwiftBridgeCore.swift`,
-`include/Ethersync.swift`, and `examples/main.swift` using
+`include/Tidkod.swift`, and `examples/main.swift` using
 `-import-objc-header include/BridgingHeader.h`, and link the supplied static
 library plus the platform libraries listed in CMakeLists.txt. Add
-`-D ETHERSYNC_NATIVE` for the native Swift smoke test.
+`-D TIDKOD_NATIVE` for the native Swift smoke test.
 
 C/C++ target matrix: macOS arm64/x86_64, Linux x86_64, Windows MSVC x86_64.
 Swift initially targets macOS. CI runner results, not configuration files or a
@@ -130,7 +130,7 @@ local cross-compile alone, establish support on each target.
 
 On macOS the SDK also contains `Package.swift` and a static XCFramework. Add the
 SDK directory as a local Swift package, or run `swift run --package-path SDK_DIR
-EthersyncSmoke`. XCFramework metadata is assembled in Rust; packaging does not
+TidkodSmoke`. XCFramework metadata is assembled in Rust; packaging does not
 require an Xcode installation. Swift compilation still requires Apple's toolchain.
 Build distributed macOS libraries with `MACOSX_DEPLOYMENT_TARGET=13.0` to match
 the package's minimum OS version.
@@ -155,13 +155,13 @@ The SwiftPM package uses a static XCFramework by default. To also compile real
 Swift dylibs against the Rust dylib, opt into the Swift compiler during packaging:
 
 ```sh
-ETHERSYNC_SDK_SWIFT_DYLIB=1 ETHERSYNC_SDK_ARTIFACTS="$PWD/target/debug" \
-  ETHERSYNC_SDK_OUT="$PWD/dist" cargo build -p ethersync-sdk
-# Run dist/ethersync-native-<target>/swift-dylib/EthersyncSmoke
+TIDKOD_SDK_SWIFT_DYLIB=1 TIDKOD_SDK_ARTIFACTS="$PWD/target/debug" \
+  TIDKOD_SDK_OUT="$PWD/dist" cargo build -p tidkod-sdk
+# Run dist/tidkod-native-<target>/swift-dylib/TidkodSmoke
 ```
 
-This produces `libEthersync.dylib`, `libEthersyncSys.dylib`, and Swift modules in
-`swift-dylib/`, using `lib/libethersync_bindings.dylib`. All three libraries use
+This produces `libTidkod.dylib`, `libTidkodSys.dylib`, and Swift modules in
+`swift-dylib/`, using `lib/libtidkod_bindings.dylib`. All three libraries use
 `@rpath` install names. Embed/sign all three with your app, configure its runtime
 library search path, and make the generated Swift modules and `swift-c` module map
 available at compile time. The generated sample resolves its libraries relative
@@ -175,7 +175,7 @@ Swift `Endpoint` is an immutable wrapper value. Its Network framework adapters
 accept `IPv4Address`, `IPv6Address`, and `NWEndpoint.Port`:
 
 ```swift
-import Ethersync
+import Tidkod
 import Network
 
 let options = LeaderOptions()

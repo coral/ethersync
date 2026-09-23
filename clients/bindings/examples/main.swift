@@ -11,7 +11,7 @@ do {
     try bytes.withUnsafeBufferPointer { try core_state(core, $0, 123) }
     fatalError("malformed input accepted")
 } catch { }
-#if ETHERSYNC_NATIVE
+#if TIDKOD_NATIVE
 let engine = try engine_new()
 let options = leader_options_new()
 leader_options_advertise(options, false)

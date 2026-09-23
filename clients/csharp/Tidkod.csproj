@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <TidkodGeneratedDir Condition="'$(TidkodGeneratedDir)' == ''">$(MSBuildThisFileDirectory)../../target/debug/tidkod-generated/native</TidkodGeneratedDir>
+    <TidkodNativeLibraryDir Condition="'$(TidkodNativeLibraryDir)' == ''">$(MSBuildThisFileDirectory)../../target/debug</TidkodNativeLibraryDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(TidkodGeneratedDir)/NativeMethods.g.cs" />
+    <Compile Include="$(TidkodGeneratedDir)/Tidkod.g.cs" />
+    <Compile Include="$(TidkodGeneratedDir)/Tidkod.Support.cs" />
+    <Compile Include="$(TidkodGeneratedDir)/Tidkod.Native.cs" Condition="Exists('$(TidkodGeneratedDir)/Tidkod.Native.cs')" />
+    <None Include="$(TidkodNativeLibraryDir)/libtidkod_bindings.dylib" Condition="Exists('$(TidkodNativeLibraryDir)/libtidkod_bindings.dylib')" Link="libtidkod_bindings.dylib" CopyToOutputDirectory="Always" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(TidkodNativeLibraryDir)/libtidkod_bindings.so" Condition="Exists('$(TidkodNativeLibraryDir)/libtidkod_bindings.so')" Link="libtidkod_bindings.so" CopyToOutputDirectory="Always" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(TidkodNativeLibraryDir)/tidkod_bindings.dll" Condition="Exists('$(TidkodNativeLibraryDir)/tidkod_bindings.dll')" Link="tidkod_bindings.dll" CopyToOutputDirectory="Always" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

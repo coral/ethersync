@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { Follower } from '../pkg-node/ethersync_wasm.js';
+import { Follower } from '../pkg-node/tidkod_wasm.js';
 export function replay(trace) {
   assert.equal(trace.version, 1);
   assert.equal(trace.enabled, true, 'This export has diagnostics only: replay capture was disabled. Reload without ?trace=0 for a complete capture.');
@@ -24,6 +24,6 @@ export function replay(trace) {
 }
 if (process.argv[1]?.endsWith('/replay-trace.mjs')) {
   const file = process.argv[2];
-  if (!file) throw new Error('Usage: pnpm replay /path/to/ethersync-timing.json');
+  if (!file) throw new Error('Usage: pnpm replay /path/to/tidkod-timing.json');
   console.log(replay(JSON.parse(readFileSync(file, 'utf8'))));
 }

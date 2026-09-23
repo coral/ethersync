@@ -1,5 +1,5 @@
 [package]
-name = "ethersync-bindings"
+name = "tidkod-bindings"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,14 +8,14 @@ publish = false
 crate-type = ["staticlib", "cdylib", "rlib"]
 [features]
 default = ["native", "c", "cpp", "swift", "csharp"]
-native = ["dep:libethersync"]
+native = ["dep:tidkod"]
 c = []
 csharp = ["c"]
 cpp = ["c"]
 swift = ["dep:swift-bridge"]
 [dependencies]
-ethersync-protocol = { path = "../../protocol" }
-libethersync = { path = "../../native", optional = true }
+tidkod-protocol = { path = "../../protocol" }
+tidkod = { path = "../../native", optional = true }
 swift-bridge = { version = "0.1.59", optional = true }
 [build-dependencies]
 syn = { version = "2", features = ["full", "extra-traits"] }

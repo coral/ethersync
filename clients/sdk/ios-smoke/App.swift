@@ -1,10 +1,10 @@
 import SwiftUI
 
 @main
-struct EthersyncSmokeApp: App {
+struct TidkodSmokeApp: App {
     var body: some Scene {
         WindowGroup {
-            Text("Ethersync SDK smoke tests")
+            Text("Tidkod SDK smoke tests")
         }
     }
 }

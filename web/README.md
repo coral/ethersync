@@ -2,7 +2,7 @@
 
 This is a local portability test application. The native leader and browser use the same
 protobuf schema, clock estimator, timeline arithmetic, and correction policy in
-[`ethersync-protocol`](../protocol). [`clients/wasm`](../clients/wasm) wraps those APIs with
+[`tidkod-protocol`](../protocol). [`clients/wasm`](../clients/wasm) wraps those APIs with
 wasm-bindgen. TypeScript uses published `@moq/net` for WebTransport and MoQ framing; it does
 not implement a second synchronization algorithm. No local MoQ checkout dependency is used.
 
@@ -12,7 +12,7 @@ Requirements: Rust, the `wasm32-unknown-unknown` target, Node >= 22.12, and pnpm
 
 ```sh
 # From repository root, terminal 1:
-cargo run -p ethersync --example leader -- --bind 0.0.0.0:4443
+cargo run -p tidkod --example leader -- --bind 0.0.0.0:4443
 # Enter `play` in its command line when ready.
 
 # Terminal 2:
@@ -53,7 +53,7 @@ pnpm check     # TypeScript only, after generating WASM
 pnpm measure   # real HTTP/3 native-leader vs compiled-WASM same-instant accuracy
 # From repository root:
 cargo test --workspace
-cargo test -p ethersync --test webtransport
+cargo test -p tidkod --test webtransport
 ```
 
 The HTTP/3 test connects to a real native leader, receives state, exchanges private datagrams,
@@ -119,7 +119,7 @@ no longer preserves startup timing errors with the steady-state slew limiter.
 ## Timing capture
 
 Reload before connecting to start a bounded replayable capture; capture is enabled by default. Under Connection
-details, **Export timing trace** downloads `ethersync-timing.json`. Run `pnpm replay /path/to/file.json`
+details, **Export timing trace** downloads `tidkod-timing.json`. Run `pnpm replay /path/to/file.json`
 from `web` to replay the retained prefix through compiled WASM and verify results exactly.
 The log preserves the first 16,384 operations and reports later omissions; reload to start again.
 Use `?trace=0` to disable capture. The details panel also shows the feasible clock-offset interval

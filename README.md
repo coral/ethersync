@@ -1,4 +1,4 @@
-# Ethersync
+# Tidkod
 
 stay tuned.
 

@@ -36,8 +36,8 @@ For local multi-address regression testing, substitute two addresses assigned to
 the test machine (Ethernet and Wi-Fi, or loopback and one LAN address):
 
 ```sh
-ETHERSYNC_TEST_LOCAL_IPS=10.0.1.5,10.0.1.47 cargo test -p libethersync --locked --test loopback wildcard_listener_accepts_multiple_local_addresses -- --ignored --nocapture
-cargo test -p libethersync --locked --test mdns -- --ignored --nocapture
+TIDKOD_TEST_LOCAL_IPS=10.0.1.5,10.0.1.47 cargo test -p tidkod --locked --test loopback wildcard_listener_accepts_multiple_local_addresses -- --ignored --nocapture
+cargo test -p tidkod --locked --test mdns -- --ignored --nocapture
 ```
 
 The test connects concurrent pinned followers through each address to one

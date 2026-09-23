@@ -3,14 +3,14 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr,
 };
-pub struct EsBuffer {
+pub struct TKBuffer {
     bytes: Vec<u8>,
 }
-pub(crate) fn buffer(bytes: Vec<u8>) -> *mut EsBuffer {
-    Box::into_raw(Box::new(EsBuffer { bytes }))
+pub(crate) fn buffer(bytes: Vec<u8>) -> *mut TKBuffer {
+    Box::into_raw(Box::new(TKBuffer { bytes }))
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ethersync_buffer_free(value: *mut EsBuffer) {
+pub unsafe extern "C" fn tidkod_buffer_free(value: *mut TKBuffer) {
     if !value.is_null() {
         unsafe {
             drop(Box::from_raw(value));
@@ -18,11 +18,11 @@ pub unsafe extern "C" fn ethersync_buffer_free(value: *mut EsBuffer) {
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ethersync_buffer_data(value: *const EsBuffer) -> *const u8 {
+pub unsafe extern "C" fn tidkod_buffer_data(value: *const TKBuffer) -> *const u8 {
     unsafe { value.as_ref() }.map_or(ptr::null(), |v| v.bytes.as_ptr())
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ethersync_buffer_len(value: *const EsBuffer) -> usize {
+pub unsafe extern "C" fn tidkod_buffer_len(value: *const TKBuffer) -> usize {
     unsafe { value.as_ref() }.map_or(0, |v| v.bytes.len())
 }
 pub(crate) unsafe fn input<'a>(data: *const u8, len: usize) -> Result<&'a [u8], String> {
@@ -35,7 +35,7 @@ pub(crate) unsafe fn input<'a>(data: *const u8, len: usize) -> Result<&'a [u8], 
     Ok(unsafe { std::slice::from_raw_parts(data, len) })
 }
 pub(crate) unsafe fn invoke(
-    error: *mut *mut EsBuffer,
+    error: *mut *mut TKBuffer,
     f: impl FnOnce() -> Result<(), String>,
 ) -> i32 {
     if !error.is_null() {

@@ -1,9 +1,9 @@
 # Versions, CI, and SDK releases
 
 The project has one workspace version and one `vX.Y.Z` tag per release.
-`ethersync-protocol` and `libethersync` are the only crates intended for crates.io.
-Rust applications use `libethersync::{Engine, LeaderConfig, ...}`. Foreign library
-names remain `ethersync_bindings`; C, C++, and C# share the same native binary.
+`tidkod-protocol` and `tidkod` are the only crates intended for crates.io.
+Rust applications use `tidkod::{Engine, LeaderConfig, ...}`. Foreign library
+names remain `tidkod_bindings`; C, C++, and C# share the same native binary.
 
 ## Local release command
 
@@ -69,12 +69,12 @@ static and dynamic libraries, generated binding sources, consumer examples,
 build metadata, licenses, dependency source links, and a buildable Rust source
 snapshot. Do not mix headers or libraries between variants or versions.
 
-Windows packages include `ethersync_bindings.dll`, its `.dll.lib` import library,
-and the distinct static `ethersync_bindings.lib`. C# uses P/Invoke against the DLL;
+Windows packages include `tidkod_bindings.dll`, its `.dll.lib` import library,
+and the distinct static `tidkod_bindings.lib`. C# uses P/Invoke against the DLL;
 C/C++ can choose either linkage. There is no NuGet publication in this pipeline.
 
-macOS packages include `libethersync_bindings.dylib` and `.a`, Swift sources, and
-the `libEthersyncSys.dylib`/`libEthersync.dylib` wrapper layers. Compiled Swift
+macOS packages include `libtidkod_bindings.dylib` and `.a`, Swift sources, and
+the `libTidkodSys.dylib`/`libTidkod.dylib` wrapper layers. Compiled Swift
 modules require a compatible Swift toolchain; rebuild the provided sources or
 use the Swift package when integrating with another toolchain. The universal
 Apple ZIP combines both macOS architectures and iOS device/simulator slices in
@@ -93,7 +93,7 @@ For a desktop target matching the host architecture:
 ```sh
 python3 scripts/sdk.py build --target aarch64-apple-darwin --variant native
 python3 scripts/sdk.py build --target aarch64-apple-darwin --variant core
-python3 scripts/sdk.py test dist/releases/ethersync-0.1.0-native-aarch64-apple-darwin.tar.gz
+python3 scripts/sdk.py test dist/releases/tidkod-0.1.0-native-aarch64-apple-darwin.tar.gz
 ```
 
 Replace the example version and target as needed. The build defaults to release;
@@ -129,9 +129,9 @@ archives plus the Apple ZIP, validates their metadata and binary architectures,
 and creates `SHA256SUMS`. Names are:
 
 ```text
-ethersync-{version}-{native|core}-{rust-target}.zip       # Windows
-ethersync-{version}-{native|core}-{rust-target}.tar.gz    # macOS/Linux
-ethersync-{version}-apple-xcframework.zip
+tidkod-{version}-{native|core}-{rust-target}.zip       # Windows
+tidkod-{version}-{native|core}-{rust-target}.tar.gz    # macOS/Linux
+tidkod-{version}-apple-xcframework.zip
 SHA256SUMS
 ```
 

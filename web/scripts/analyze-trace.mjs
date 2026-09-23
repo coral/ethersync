@@ -20,6 +20,6 @@ export function analyze(trace) {
   };
 }
 if(process.argv[1]?.endsWith('/analyze-trace.mjs')) {
-  if(!process.argv[2]) throw Error('Usage: pnpm analyze /path/to/ethersync-timing.json');
+  if(!process.argv[2]) throw Error('Usage: pnpm analyze /path/to/tidkod-timing.json');
   console.log(JSON.stringify(analyze(JSON.parse(readFileSync(process.argv[2],'utf8'))),null,2));
 }

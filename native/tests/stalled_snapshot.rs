@@ -1,10 +1,10 @@
 //! A partially sent state frame must not block the follower's clock exchanges.
-use ethersync_protocol::{decode_probe, encode, timeline::Timeline};
-use libethersync::{Engine, Event, FollowerConfig};
 use std::{
     sync::mpsc,
     time::{Duration, Instant},
 };
+use tidkod::{Engine, Event, FollowerConfig};
+use tidkod_protocol::{decode_probe, encode, timeline::Timeline};
 #[test]
 fn partial_snapshot_keeps_clock_probes_serviceable() {
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
@@ -15,11 +15,11 @@ fn partial_snapshot_keeps_clock_probes_serviceable() {
                 let mut config=moq_native::ServerConfig::default();config.bind=Some("127.0.0.1:0".into());config.version=vec!["moq-lite-05".parse().unwrap()];config.tls.generate=vec!["localhost".into()];
                 let mut server=config.init().unwrap();ready_tx.send(server.local_addr().unwrap()).unwrap();
                 let origin=||moq_net::origin::Info::new(moq_net::Origin::random()).produce();let publish=origin();let ingest=origin();
-                let mut broadcast=publish.create_broadcast("ethersync/v1",moq_net::broadcast::Route::new().with_announce(true)).unwrap();
+                let mut broadcast=publish.create_broadcast("tidkod/v1",moq_net::broadcast::Route::new().with_announce(true)).unwrap();
                 let mut states=broadcast.create_track("state",None).unwrap();let mut replies=broadcast.create_track("clock/reply",None).unwrap();
                 states.write_frame(moq_net::Timestamp::now(),encode(&Timeline{revision:1,session:[1;16],..Default::default()}.wire()).unwrap()).unwrap();
                 let request=server.accept().await.unwrap();let _session=request.with_publisher(&publish).with_subscriber(ingest.clone()).ok().await.unwrap();
-                let incoming=ingest.consume().announced_broadcast("ethersync/v1").await.unwrap();
+                let incoming=ingest.consume().announced_broadcast("tidkod/v1").await.unwrap();
                 let mut probes=incoming.track("clock/request").unwrap().subscribe(None).await.unwrap();
                 let epoch=Instant::now();let now=||epoch.elapsed().as_nanos() as u64+1;
                 let mut partial_group=None;

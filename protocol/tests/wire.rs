@@ -1,4 +1,4 @@
-use ethersync_protocol::{wire::*, *};
+use tidkod_protocol::{wire::*, *};
 fn unhex(s: &str) -> Vec<u8> {
     let s = s.trim();
     (0..s.len())

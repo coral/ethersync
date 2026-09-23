@@ -2,11 +2,11 @@
 mod common;
 mod terminal;
 use chrono::Timelike;
-use libethersync::*;
 use std::{
     io::IsTerminal,
     time::{Duration, Instant},
 };
+use tidkod::*;
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = common::args();
     if args.contains_key("--help") {

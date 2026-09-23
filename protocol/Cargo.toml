@@ -1,11 +1,11 @@
 [package]
-name = "ethersync-protocol"
+name = "tidkod-protocol"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-repository = "https://github.com/coral/ethersync"
+repository = "https://github.com/coral/tidkod"
 publish = ["crates-io"]
-description = "Protocol and timing core for Ethersync LAN timecode synchronization"
+description = "Protocol and timing core for Tidkod LAN timecode synchronization"
 build = "build.rs"
 
 [dependencies]

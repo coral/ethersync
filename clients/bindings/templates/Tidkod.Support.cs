@@ -4,17 +4,17 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using Microsoft.Win32.SafeHandles;
-using Sys = Ethersync.Sys;
-namespace Ethersync;
+using Sys = Tidkod.Sys;
+namespace Tidkod;
 
 public enum ConnectionState : byte { Disconnected, Connecting, Connected, Shutdown }
 public enum Synchronization : byte { Uninitialized, Acquiring, Synchronized, Holdover }
 public enum SourceKind : byte { Generated, Tracked }
 public enum SourceHealth : byte { Healthy, Degraded }
-public sealed class EthersyncException : Exception
+public sealed class TidkodException : Exception
 {
     public int Status { get; }
-    internal EthersyncException(int status, string message) : base(message) { Status = status; }
+    internal TidkodException(int status, string message) : base(message) { Status = status; }
 }
 
 // Fail fast on overlapping operations instead of blocking the timecode read path.
@@ -44,20 +44,20 @@ internal readonly ref struct HandleLease
 }
 internal static unsafe class Native
 {
-    internal static void Check(int status, Sys.EsBuffer* error)
+    internal static void Check(int status, Sys.TKBuffer* error)
     {
-        if (status == 0) { if (error != null) Sys.NativeMethods.ethersync_buffer_free(error); return; }
-        throw new EthersyncException(status, error == null ? "Native call failed" : TakeString(error));
+        if (status == 0) { if (error != null) Sys.NativeMethods.tidkod_buffer_free(error); return; }
+        throw new TidkodException(status, error == null ? "Native call failed" : TakeString(error));
     }
-    internal static string TakeString(Sys.EsBuffer* value)
+    internal static string TakeString(Sys.TKBuffer* value)
     {
-        try { return Encoding.UTF8.GetString(new ReadOnlySpan<byte>(Sys.NativeMethods.ethersync_buffer_data(value), checked((int)Sys.NativeMethods.ethersync_buffer_len(value)))); }
-        finally { Sys.NativeMethods.ethersync_buffer_free(value); }
+        try { return Encoding.UTF8.GetString(new ReadOnlySpan<byte>(Sys.NativeMethods.tidkod_buffer_data(value), checked((int)Sys.NativeMethods.tidkod_buffer_len(value)))); }
+        finally { Sys.NativeMethods.tidkod_buffer_free(value); }
     }
-    internal static byte[] TakeBytes(Sys.EsBuffer* value)
+    internal static byte[] TakeBytes(Sys.TKBuffer* value)
     {
-        try { return new ReadOnlySpan<byte>(Sys.NativeMethods.ethersync_buffer_data(value), checked((int)Sys.NativeMethods.ethersync_buffer_len(value))).ToArray(); }
-        finally { Sys.NativeMethods.ethersync_buffer_free(value); }
+        try { return new ReadOnlySpan<byte>(Sys.NativeMethods.tidkod_buffer_data(value), checked((int)Sys.NativeMethods.tidkod_buffer_len(value))).ToArray(); }
+        finally { Sys.NativeMethods.tidkod_buffer_free(value); }
     }
 }
 

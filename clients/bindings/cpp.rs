@@ -18,14 +18,14 @@ pub fn generate(
     let mut header = String::from(
         r#"// Generated; do not edit.
 #pragma once
-#include "ethersync.h"
+#include "tidkod.h"
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 #include <utility>
 #include <cstdlib>
-namespace ethersync::client {
+namespace tidkod::client {
 template<class T> class Result {
     std::optional<T> value_; std::string error_;
     Result(std::string error, int): error_(std::move(error)) {}
@@ -46,18 +46,18 @@ public:
 };
 namespace detail {
 struct Buffer {
-    ::EsBuffer* raw=nullptr;
-    ~Buffer() { ethersync_buffer_free(raw); }
+    ::TKBuffer* raw=nullptr;
+    ~Buffer() { tidkod_buffer_free(raw); }
     Buffer()=default;
     Buffer(const Buffer&)=delete;
     Buffer& operator=(const Buffer&)=delete;
     std::string text() const {
-        auto size=ethersync_buffer_len(raw);
-        return size ? std::string(reinterpret_cast<const char*>(ethersync_buffer_data(raw)), size) : std::string();
+        auto size=tidkod_buffer_len(raw);
+        return size ? std::string(reinterpret_cast<const char*>(tidkod_buffer_data(raw)), size) : std::string();
     }
     std::vector<uint8_t> bytes() const {
-        auto size=ethersync_buffer_len(raw);
-        auto data=ethersync_buffer_data(raw);
+        auto size=tidkod_buffer_len(raw);
+        auto data=tidkod_buffer_data(raw);
         return size ? std::vector<uint8_t>(data, data+size) : std::vector<uint8_t>();
     }
 };
@@ -84,7 +84,7 @@ struct Buffer {
     };
     let mut bodies = String::new();
     for owner in opaque {
-        let free = format!("ethersync_{}_free", owner.to_lowercase());
+        let free = format!("tidkod_{}_free", owner.to_lowercase());
         header += &format!(
             r#"class {owner} {{
     ::{owner}* raw_;
@@ -169,7 +169,7 @@ public:
                 }
             }
             callargs.push("&error.raw".into());
-            bodies += &format!("auto status=::ethersync_{name}({});\n", callargs.join(","));
+            bodies += &format!("auto status=::tidkod_{name}({});\n", callargs.join(","));
             if fallible {
                 bodies += &format!("if(status) return {rt}::failure(error.text());\n");
             } else {
@@ -202,5 +202,5 @@ public:
     }
     header += &bodies;
     header += "}\n";
-    fs::write(dir.join("ethersync-client.hpp"), header).unwrap();
+    fs::write(dir.join("tidkod-client.hpp"), header).unwrap();
 }

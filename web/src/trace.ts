@@ -1,5 +1,5 @@
 import type { WallReference } from './wall-reference';
-import type { Follower } from '../pkg/ethersync_wasm';
+import type { Follower } from '../pkg/tidkod_wasm';
 
 // Retain a prefix, never silently evict the initial state needed for exact replay.
 // The example enables capture by default (?trace=0 opts out). Recording follows the timed operation.

@@ -1,5 +1,5 @@
-//! Thin browser binding; parsing and synchronization live in ethersync-protocol.
-use ethersync_protocol::{
+//! Thin browser binding; parsing and synchronization live in tidkod-protocol.
+use tidkod_protocol::{
     CorrectionPolicy, SyncState, decode_snapshot,
     probes::Probes,
     timeline::{FollowerCore, Timeline, View},
@@ -35,7 +35,7 @@ impl Follower {
         }
     }
     pub fn connecting(&mut self) {
-        self.core.view.connection = ethersync_protocol::ConnectionState::Connecting;
+        self.core.view.connection = tidkod_protocol::ConnectionState::Connecting;
     }
     pub fn connected(&mut self) {
         self.probes = Probes::default();
@@ -143,7 +143,7 @@ impl Follower {
     ) -> Result<JsValue, JsValue> {
         let now = timestamp(now_ms)?;
         let delay = timestamp(compensation_delay_ms)?;
-        ethersync_protocol::timeline::presentation_time(now, delay).map_err(error)?;
+        tidkod_protocol::timeline::presentation_time(now, delay).map_err(error)?;
         if let Some(e) = self.core.tick(now, 2_000_000_000) {
             self.last_event = format!("{e:?}");
         }
@@ -172,8 +172,8 @@ struct Evidence {
     samples: u32,
     consistent: bool,
 }
-impl From<ethersync_protocol::clock::OffsetEvidence> for Evidence {
-    fn from(e: ethersync_protocol::clock::OffsetEvidence) -> Self {
+impl From<tidkod_protocol::clock::OffsetEvidence> for Evidence {
+    fn from(e: tidkod_protocol::clock::OffsetEvidence) -> Self {
         Self {
             lower_ms: e.lower_ns / 1e6,
             upper_ms: e.upper_ns / 1e6,
@@ -230,8 +230,7 @@ fn serialize_boundary(view: View, now_ms: f64) -> Result<JsValue, JsValue> {
 }
 
 fn serialize_reading(view: View, now: u64, delay: u64, event: &str) -> Result<JsValue, JsValue> {
-    let presentation =
-        ethersync_protocol::timeline::presentation_time(now, delay).map_err(error)?;
+    let presentation = tidkod_protocol::timeline::presentation_time(now, delay).map_err(error)?;
     let r = view.evaluate_for_presentation(now, delay).map_err(error)?;
     let s = r.status;
     #[derive(serde::Serialize)]

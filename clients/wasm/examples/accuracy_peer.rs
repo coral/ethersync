@@ -1,8 +1,8 @@
 //! Native leader + HTTP/3 byte transport for the Node/WASM accuracy investigation.
 //! The independent CAL/SAMPLE pipe never feeds the follower's clock estimator.
-use libethersync::{Engine, LeaderConfig, Position, Rate};
 use std::io::{BufRead, Write};
 use std::time::Duration;
+use tidkod::{Engine, LeaderConfig, Position, Rate};
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
@@ -45,7 +45,7 @@ fn main() {
     rt.block_on(async {
         let origin = || moq_net::origin::Info::new(moq_net::Origin::random()).produce();
         let publish = origin(); let ingest = origin();
-        let mut b = publish.create_broadcast("ethersync/v1", moq_net::broadcast::Route::new().with_announce(true)).unwrap();
+        let mut b = publish.create_broadcast("tidkod/v1", moq_net::broadcast::Route::new().with_announce(true)).unwrap();
         let mut requests = b.create_track("clock/request", None).unwrap();
         let mut config = moq_native::ClientConfig::default();
         config.bind = "127.0.0.1:0".parse().unwrap();
@@ -53,7 +53,7 @@ fn main() {
         config.tls.fingerprint = vec![leader.info().fingerprint.clone()];
         let client = config.init().unwrap().with_publisher(&publish).with_subscriber(ingest.clone());
         let session = client.connect(format!("https://{}/", leader.info().address).parse().unwrap()).await.unwrap();
-        let incoming = ingest.consume().announced_broadcast("ethersync/v1").await.unwrap();
+        let incoming = ingest.consume().announced_broadcast("tidkod/v1").await.unwrap();
         let mut states = incoming.track("state").unwrap().subscribe(None).await.unwrap();
         let mut replies = incoming.track("clock/reply").unwrap().subscribe(None).await.unwrap();
         output("READY".into());

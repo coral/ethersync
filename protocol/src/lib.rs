@@ -1,20 +1,20 @@
-//! Portable Ethersync v1 wire schema, timecode arithmetic, and synchronization.
+//! Portable Tidkod v1 wire schema, timecode arithmetic, and synchronization.
 //! All timestamps are supplied by the caller; no networking or runtime is required.
 //!
 //! A transport adapter decodes complete messages and feeds the shared follower:
 //!
 //! ```
-//! use ethersync_protocol::{decode_snapshot, CorrectionPolicy, timeline::{FollowerCore, Timeline}};
+//! use tidkod_protocol::{decode_snapshot, CorrectionPolicy, timeline::{FollowerCore, Timeline}};
 //! let mut follower = FollowerCore::new(Timeline::default(), CorrectionPolicy::default());
 //! follower.connected();
-//! # let wire_bytes = ethersync_protocol::encode(&Timeline {session: [1;16], revision: 1, ..Default::default()}.wire())?;
+//! # let wire_bytes = tidkod_protocol::encode(&Timeline {session: [1;16], revision: 1, ..Default::default()}.wire())?;
 //! let snapshot = decode_snapshot(&wire_bytes)?;
 //! follower.state(Timeline::from_wire(&snapshot)?, 1_000_000);
 //! // Feed matched four-timestamp exchanges through follower.measurement(...).
 //! // Until the first valid clock measurement, this returns the configured fallback.
 //! let reading = follower.view.evaluate(2_000_000);
 //! assert_eq!(reading.label().to_string(), "00:00:00:00");
-//! # Ok::<(), ethersync_protocol::Error>(())
+//! # Ok::<(), tidkod_protocol::Error>(())
 //! ```
 pub mod boundary;
 pub use boundary::{Boundary, BoundaryKind};
@@ -37,9 +37,9 @@ pub mod timecode;
 pub use timecode::*;
 /// Generated exclusively from the authoritative protobuf schema.
 pub mod wire {
-    include!(concat!(env!("OUT_DIR"), "/ethersync.v1.rs"));
+    include!(concat!(env!("OUT_DIR"), "/tidkod.v1.rs"));
 }
-pub const DESCRIPTOR: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/ethersync.bin"));
+pub const DESCRIPTOR: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/tidkod.bin"));
 pub const VERSION: u32 = 1;
 pub const MAX_MESSAGE: usize = 512;
 pub const MAX_SCHEDULED: usize = 4;
@@ -48,7 +48,7 @@ pub const MAX_SCHEDULED: usize = 4;
 pub enum Error {
     #[error("invalid timecode or wire value: {0}")]
     Invalid(&'static str),
-    #[error("unsupported Ethersync protocol version {0}")]
+    #[error("unsupported Tidkod protocol version {0}")]
     Version(u32),
     #[error("application message exceeds 512 bytes")]
     Size,

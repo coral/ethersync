@@ -1,8 +1,8 @@
-use libethersync::*;
 use std::{
     thread,
     time::{Duration, Instant},
 };
+use tidkod::*;
 #[test]
 #[ignore = "requires a multicast-capable network interface; run explicitly"]
 fn mdns_advertise_resolve_duplicate_names_and_withdraw() {

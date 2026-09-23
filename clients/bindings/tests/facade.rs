@@ -1,4 +1,4 @@
-use ethersync_bindings::api::*;
+use tidkod_bindings::api::*;
 #[test]
 fn timecode_arithmetic_is_exact_and_validates_labels() {
     assert!(timecode_format_new(25, 1, true).is_err());

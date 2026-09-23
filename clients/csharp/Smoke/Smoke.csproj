@@ -4,7 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <DefineConstants Condition="'$(EthersyncCoreOnly)' != 'true'">$(DefineConstants);ETHERSYNC_NATIVE</DefineConstants>
+    <DefineConstants Condition="'$(TidkodCoreOnly)' != 'true'">$(DefineConstants);TIDKOD_NATIVE</DefineConstants>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="../Ethersync.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../Tidkod.csproj" /></ItemGroup>
 </Project>

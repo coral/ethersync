@@ -1,5 +1,5 @@
 import Foundation
-#if ETHERSYNC_NATIVE
+#if TIDKOD_NATIVE
 import Network
 #endif
 
@@ -15,10 +15,10 @@ precondition(predicted.frames == 0)
 do {
     try core.state(bytes: [255], nowNs: 123)
     fatalError("malformed input accepted")
-} catch let error as EthersyncError {
+} catch let error as TidkodError {
     precondition(!error.description.isEmpty)
 }
-#if ETHERSYNC_NATIVE
+#if TIDKOD_NATIVE
 let v6 = try Endpoint.ipv6(IPv6Address("fe80::1")!, port: 4443, scopeID: 7)
 precondition(v6.address() == "[fe80::1%7]:4443")
 let v4 = try Endpoint.ipv4(.loopback, port: 4443)
@@ -26,7 +26,7 @@ precondition(v4.address() == "127.0.0.1:4443")
 do {
     _ = try FollowerOptions(endpoint: .loopback(port: .any))
     fatalError("zero destination port accepted")
-} catch is EthersyncError { }
+} catch is TidkodError { }
 let engine = try Engine()
 let options = LeaderOptions()
 options.advertise(enabled: false)
@@ -41,7 +41,7 @@ precondition(endpoints.count() == 1)
 let firstEndpoint = try endpoints.get(index: 0)
 precondition(firstEndpoint.address() == leader.endpoint().address())
 do { _ = try endpoints.get(index: 1); fatalError("out-of-range endpoint accepted") }
-catch is EthersyncError { }
+catch is TidkodError { }
 let follow = try FollowerOptions(endpoint: leader.endpoint())
 follow.pin(fingerprint: leader.fingerprint())
 let follower = try engine.follower(options: follow)

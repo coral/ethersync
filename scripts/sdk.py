@@ -39,10 +39,10 @@ def notices(sdk, target, variant):
         features += ",native"
     metadata = json.loads(run("cargo", "metadata", "--locked", "--format-version", "1",
                               "--filter-platform", target, "--no-default-features",
-                              "--features", "ethersync-bindings/" + features.replace(",", ",ethersync-bindings/"), capture=True))
+                              "--features", "tidkod-bindings/" + features.replace(",", ",tidkod-bindings/"), capture=True))
     packages = {p["id"]: p for p in metadata["packages"]}
     nodes = {n["id"]: n for n in metadata["resolve"]["nodes"]}
-    start = next(p["id"] for p in packages.values() if p["name"] == "ethersync-bindings")
+    start = next(p["id"] for p in packages.values() if p["name"] == "tidkod-bindings")
     pending, seen = [start], set()
     while pending:
         item = pending.pop()
@@ -91,7 +91,7 @@ def notices(sdk, target, variant):
     (sdk / "THIRD-PARTY.json").write_text(json.dumps(inventory, indent=2) + "\n")
     (sdk / "THIRD-PARTY.txt").write_text(
         "Dependency inventory includes native dependencies and build tools.\n"
-        "Their licenses remain applicable independently of the Ethersync license.\n"
+        "Their licenses remain applicable independently of the Tidkod license.\n"
         "Exact upstream source is available at the URLs in THIRD-PARTY.json.\n"
         "MPL-2.0-covered source, including triple_buffer, is available at its listed URL\n"
         "under MPL-2.0. No modifications to those dependencies are included.\n"
@@ -137,14 +137,14 @@ def machine(path):
 
 
 def test_sdk(path):
-    with tempfile.TemporaryDirectory(prefix="ethersync-consumer-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="tidkod-consumer-") as temporary:
         work = Path(temporary)
         sdk = unpack(path.resolve(), work / "unpacked")
         info = dict(line.split("=", 1) for line in (sdk / "BUILD.txt").read_text().splitlines())
         target, variant = info["target"], info["variant"]
-        library = "ethersync_bindings.dll" if "windows" in target else "libethersync_bindings." + ("dylib" if "apple" in target else "so")
+        library = "tidkod_bindings.dll" if "windows" in target else "libtidkod_bindings." + ("dylib" if "apple" in target else "so")
         assert machine(sdk / "lib" / library) == target.split("-")[0]
-        for name in ["LICENSE-MIT", "LICENSE-APACHE", "THIRD-PARTY.json", "include/ethersync.h", "include/ethersync-client.hpp"]:
+        for name in ["LICENSE-MIT", "LICENSE-APACHE", "THIRD-PARTY.json", "include/tidkod.h", "include/tidkod-client.hpp"]:
             assert (sdk / name).is_file(), name
         assert info["version"] in sdk.name
         env = os.environ.copy()
@@ -157,7 +157,7 @@ def test_sdk(path):
         run("cmake", "-S", sdk, "-B", build, "-DCMAKE_BUILD_TYPE=Release", *options, env=env)
         run("cmake", "--build", build, "--config", "Release", env=env)
         run("ctest", "--test-dir", build, "-C", "Release", "--output-on-failure", env=env)
-        executable = build / ("Release/ethersync-shared-client-c.exe" if "windows" in target else "ethersync-shared-client-c")
+        executable = build / ("Release/tidkod-shared-client-c.exe" if "windows" in target else "tidkod-shared-client-c")
         assert machine(executable) == target.split("-")[0]
         if "windows" in target:
             dependencies = run("dumpbin", "/dependents", executable, capture=True, env=env)
@@ -172,10 +172,10 @@ def test_sdk(path):
             run("dotnet", "run", "--project", sdk / "csharp/Smoke", "-c", "Release",
                 "--arch", "arm64" if target.startswith("aarch64") else "x64", env=env, timeout=180)
         if "apple" in target:
-            run("swift", "run", "--package-path", sdk, "-c", "release", "EthersyncSmoke", env=env, timeout=180)
-            run(sdk / "swift-dylib/EthersyncSmoke", cwd=work, env=env, timeout=30)
+            run("swift", "run", "--package-path", sdk, "-c", "release", "TidkodSmoke", env=env, timeout=180)
+            run(sdk / "swift-dylib/TidkodSmoke", cwd=work, env=env, timeout=30)
         # The extracted sources must be independently usable, with the supplied lockfile.
-        run("cargo", "check", "--manifest-path", sdk / "source/Cargo.toml", "-p", "ethersync-bindings",
+        run("cargo", "check", "--manifest-path", sdk / "source/Cargo.toml", "-p", "tidkod-bindings",
             "--locked", "--no-default-features", "--features", "c,cpp,csharp" + (",native" if variant == "native" else ""),
             "--target-dir", ROOT / "target/sdk-source-check", env=env)
 
@@ -184,21 +184,21 @@ def build_sdk(args):
     target, variant = args.target, args.variant
     features = "c,cpp,csharp" + (",swift" if "apple" in target else "") + (",native" if variant == "native" else "")
     artifacts = ROOT / "target" / ("sdk-" + variant)
-    run("cargo", "build", "-p", "ethersync-bindings", "--locked", "--target", target,
+    run("cargo", "build", "-p", "tidkod-bindings", "--locked", "--target", target,
         "--target-dir", artifacts, "--no-default-features", "--features", features,
         *(["--release"] if args.profile == "release" else []))
-    with tempfile.TemporaryDirectory(prefix="ethersync-package-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="tidkod-package-") as temporary:
         env = os.environ.copy()
-        env.update(ETHERSYNC_SDK_ARTIFACTS=str(artifacts / target / args.profile),
-                   ETHERSYNC_SDK_OUT=temporary, ETHERSYNC_SDK_VARIANT=variant)
+        env.update(TIDKOD_SDK_ARTIFACTS=str(artifacts / target / args.profile),
+                   TIDKOD_SDK_OUT=temporary, TIDKOD_SDK_VARIANT=variant)
         if "apple" in target:
-            env["ETHERSYNC_SDK_SWIFT_DYLIB"] = "1"
-        run("cargo", "build", "-p", "ethersync-sdk", "--locked", env=env)
-        sdk = Path(temporary) / f"ethersync-{variant}-{target}"
+            env["TIDKOD_SDK_SWIFT_DYLIB"] = "1"
+        run("cargo", "build", "-p", "tidkod-sdk", "--locked", env=env)
+        sdk = Path(temporary) / f"tidkod-{variant}-{target}"
         with (sdk / "BUILD.txt").open("a") as out:
             out.write(f"profile={args.profile}\nrevision={run('git', 'rev-parse', 'HEAD', capture=True).strip()}\n")
         notices(sdk, target, variant)
-        result = archive(sdk, args.out.resolve(), f"ethersync-{version()}-{variant}-{target}", "windows" in target)
+        result = archive(sdk, args.out.resolve(), f"tidkod-{version()}-{variant}-{target}", "windows" in target)
     test_sdk(result)
     print(f"Verified SDK: {result}")
 

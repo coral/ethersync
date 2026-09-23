@@ -48,23 +48,23 @@ def fixtures(directory, *, bad_profile=False, wrong_arch=False):
             ):
                 entries.append({"LibraryIdentifier": identifier, "SupportedPlatform": platform,
                                 "SupportedArchitectures": architectures, "SupportedPlatformVariant": variant})
-                files[f"RustEthersync.xcframework/{identifier}/libethersync_bindings.a"] = b""
-            files["RustEthersync.xcframework/Info.plist"] = plistlib.dumps({"AvailableLibraries": entries})
+                files[f"RustTidkod.xcframework/{identifier}/libtidkod_bindings.a"] = b""
+            files["RustTidkod.xcframework/Info.plist"] = plistlib.dumps({"AvailableLibraries": entries})
         else:
             target = next(t for t in sdk.TARGETS if t in name)
             variant = "native" if "-native-" in name else "core"
             profile = "debug" if bad_profile else "release"
             files["BUILD.txt"] = f"version=1.2.3\ntarget={target}\nvariant={variant}\nprofile={profile}\n".encode()
-            for required in ("include/ethersync.h", "include/ethersync-client.hpp", "examples/client.c", "examples/client.cpp"):
+            for required in ("include/tidkod.h", "include/tidkod-client.hpp", "examples/client.c", "examples/client.cpp"):
                 files[required] = b""
-            lib = "ethersync_bindings.dll" if "windows" in target else "libethersync_bindings." + ("dylib" if "apple" in target else "so")
+            lib = "tidkod_bindings.dll" if "windows" in target else "libtidkod_bindings." + ("dylib" if "apple" in target else "so")
             files["lib/" + lib] = binary(target.replace("aarch64", "x86_64") if wrong_arch else target)
-            files["lib/ethersync_bindings.lib" if "windows" in target else "lib/libethersync_bindings.a"] = b""
+            files["lib/tidkod_bindings.lib" if "windows" in target else "lib/libtidkod_bindings.a"] = b""
             if "windows" in target:
-                for required in ("lib/ethersync_bindings.dll.lib", "csharp/Ethersync.csproj", "include/NativeMethods.g.cs"):
+                for required in ("lib/tidkod_bindings.dll.lib", "csharp/Tidkod.csproj", "include/NativeMethods.g.cs"):
                     files[required] = b""
             if "apple" in target:
-                for required in ("Package.swift", "swift-dylib/libEthersync.dylib", "swift-dylib/libEthersyncSys.dylib"):
+                for required in ("Package.swift", "swift-dylib/libTidkod.dylib", "swift-dylib/libTidkodSys.dylib"):
                     files[required] = b""
         path = directory / name
         if name.endswith(".zip"):

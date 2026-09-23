@@ -1,8 +1,8 @@
-use libethersync::*;
 use std::{
     thread,
     time::{Duration, Instant},
 };
+use tidkod::*;
 fn config() -> LeaderConfig {
     LeaderConfig {
         bind: "127.0.0.1:0".parse().unwrap(),
@@ -392,10 +392,10 @@ fn wildcard_listener_accepts_multiple_followers() {
 }
 
 #[test]
-#[ignore = "set ETHERSYNC_TEST_LOCAL_IPS to two or more local IPv4 addresses"]
+#[ignore = "set TIDKOD_TEST_LOCAL_IPS to two or more local IPv4 addresses"]
 fn wildcard_listener_accepts_multiple_local_addresses() {
-    let addresses: Vec<std::net::Ipv4Addr> = std::env::var("ETHERSYNC_TEST_LOCAL_IPS")
-        .expect("set ETHERSYNC_TEST_LOCAL_IPS to local IPv4 addresses separated by commas")
+    let addresses: Vec<std::net::Ipv4Addr> = std::env::var("TIDKOD_TEST_LOCAL_IPS")
+        .expect("set TIDKOD_TEST_LOCAL_IPS to local IPv4 addresses separated by commas")
         .split(',')
         .map(|ip| ip.trim().parse().unwrap())
         .collect();

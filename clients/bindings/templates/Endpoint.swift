@@ -7,7 +7,7 @@ public extension Endpoint {
     }
     static func ipv6(_ address: IPv6Address, port: NWEndpoint.Port, scopeID: UInt32? = nil) throws -> Endpoint {
         guard let inheritedScope = UInt32(exactly: address.interface?.index ?? 0) else {
-            throw EthersyncError(description: "invalid IPv6 interface index")
+            throw TidkodError(description: "invalid IPv6 interface index")
         }
         return try ipv6(bytes: Array(address.rawValue), port: UInt32(port.rawValue), scopeId: scopeID ?? inheritedScope)
     }
@@ -23,7 +23,7 @@ public extension LeaderOptions {
 }
 public extension FollowerOptions {
     convenience init(endpoint: Endpoint) throws {
-        self.init(raw: try checked { try EthersyncSys.follower_options_endpoint(endpoint.raw) })
+        self.init(raw: try checked { try TidkodSys.follower_options_endpoint(endpoint.raw) })
     }
     func bind(to endpoint: Endpoint) { bindEndpoint(endpoint: endpoint) }
 }

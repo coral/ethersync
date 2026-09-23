@@ -24,44 +24,44 @@ fn copy_tree(from: &Path, to: &Path) {
 }
 fn main() {
     for key in [
-        "ETHERSYNC_SDK_OUT",
-        "ETHERSYNC_SDK_ARTIFACTS",
-        "ETHERSYNC_SDK_VARIANT",
-        "ETHERSYNC_SDK_SWIFT_DYLIB",
-        "ETHERSYNC_SDK_APPLE_ARTIFACTS",
+        "TIDKOD_SDK_OUT",
+        "TIDKOD_SDK_ARTIFACTS",
+        "TIDKOD_SDK_VARIANT",
+        "TIDKOD_SDK_SWIFT_DYLIB",
+        "TIDKOD_SDK_APPLE_ARTIFACTS",
     ] {
         println!("cargo:rerun-if-env-changed={key}");
     }
-    let Some(destination) = env::var_os("ETHERSYNC_SDK_OUT") else {
+    let Some(destination) = env::var_os("TIDKOD_SDK_OUT") else {
         return;
     };
     let destination = PathBuf::from(destination);
-    if let Some(artifacts) = env::var_os("ETHERSYNC_SDK_APPLE_ARTIFACTS") {
+    if let Some(artifacts) = env::var_os("TIDKOD_SDK_APPLE_ARTIFACTS") {
         apple::package(&artifacts, &destination);
         return;
     }
     println!("cargo:rerun-if-changed=templates/CMakeLists.txt");
     let artifacts = PathBuf::from(
-        env::var_os("ETHERSYNC_SDK_ARTIFACTS")
-            .expect("set ETHERSYNC_SDK_ARTIFACTS to the completed Cargo profile directory"),
+        env::var_os("TIDKOD_SDK_ARTIFACTS")
+            .expect("set TIDKOD_SDK_ARTIFACTS to the completed Cargo profile directory"),
     );
-    let variant = env::var("ETHERSYNC_SDK_VARIANT").unwrap_or_else(|_| "native".into());
+    let variant = env::var("TIDKOD_SDK_VARIANT").unwrap_or_else(|_| "native".into());
     assert!(variant == "native" || variant == "core");
-    let generated = artifacts.join("ethersync-generated").join(&variant);
+    let generated = artifacts.join("tidkod-generated").join(&variant);
     let target = fs::read_to_string(generated.join("target.txt"))
         .expect("build the requested binding variant first");
     println!("cargo:rerun-if-changed={}", generated.display());
-    let sdk = destination.join(format!("ethersync-{variant}-{target}"));
+    let sdk = destination.join(format!("tidkod-{variant}-{target}"));
     fs::create_dir_all(sdk.join("lib")).unwrap();
     copy_tree(&generated, &sdk.join("include"));
     let mut copied = false;
     for name in [
-        "libethersync_bindings.a",
-        "libethersync_bindings.dylib",
-        "libethersync_bindings.so",
-        "ethersync_bindings.lib",
-        "ethersync_bindings.dll",
-        "ethersync_bindings.dll.lib",
+        "libtidkod_bindings.a",
+        "libtidkod_bindings.dylib",
+        "libtidkod_bindings.so",
+        "tidkod_bindings.lib",
+        "tidkod_bindings.dll",
+        "tidkod_bindings.dll.lib",
     ] {
         let from = artifacts.join(name);
         if from.exists() {
@@ -104,18 +104,18 @@ fn main() {
             .replace("@NATIVE@", if variant == "native" { "ON" } else { "OFF" }),
     )
     .unwrap();
-    if target.contains("apple-darwin") && sdk.join("include/Ethersync.swift").exists() {
+    if target.contains("apple-darwin") && sdk.join("include/Tidkod.swift").exists() {
         let headers = sdk.join("swift-c");
         fs::create_dir_all(&headers).unwrap();
-        for name in ["SwiftBridgeCore.h", "EthersyncSwift.h", "BridgingHeader.h"] {
+        for name in ["SwiftBridgeCore.h", "TidkodSwift.h", "BridgingHeader.h"] {
             fs::copy(sdk.join("include").join(name), headers.join(name)).unwrap();
         }
         fs::write(
             headers.join("module.modulemap"),
-            "module RustEthersync { header \"BridgingHeader.h\" export * }\n",
+            "module RustTidkod { header \"BridgingHeader.h\" export * }\n",
         )
         .unwrap();
-        let binary = sdk.join("RustEthersync.xcframework");
+        let binary = sdk.join("RustTidkod.xcframework");
         if binary.exists() {
             fs::remove_dir_all(&binary).unwrap();
         }
@@ -132,8 +132,8 @@ fn main() {
         let slice = binary.join(&identifier);
         fs::create_dir_all(&slice).unwrap();
         fs::copy(
-            sdk.join("lib/libethersync_bindings.a"),
-            slice.join("libethersync_bindings.a"),
+            sdk.join("lib/libtidkod_bindings.a"),
+            slice.join("libtidkod_bindings.a"),
         )
         .unwrap();
         copy_tree(&headers, &slice.join("Headers"));
@@ -144,7 +144,7 @@ fn main() {
 <key>XCFrameworkFormatVersion</key><string>1.0</string>
 <key>AvailableLibraries</key><array><dict>
 <key>LibraryIdentifier</key><string>{identifier}</string>
-<key>LibraryPath</key><string>libethersync_bindings.a</string>
+<key>LibraryPath</key><string>libtidkod_bindings.a</string>
 <key>HeadersPath</key><string>Headers</string>
 <key>SupportedPlatform</key><string>macos</string>
 <key>SupportedArchitectures</key><array><string>{architecture}</string></array>
@@ -152,14 +152,14 @@ fn main() {
 "#)).unwrap();
         let swift = sdk.join("swift");
         fs::create_dir_all(&swift).unwrap();
-        for name in ["SwiftBridgeCore.swift", "Ethersync.swift"] {
+        for name in ["SwiftBridgeCore.swift", "Tidkod.swift"] {
             let text = fs::read_to_string(sdk.join("include").join(name)).unwrap();
-            fs::write(swift.join(name), format!("import RustEthersync\n{text}")).unwrap();
+            fs::write(swift.join(name), format!("import RustTidkod\n{text}")).unwrap();
         }
         fs::create_dir_all(sdk.join("swift-client")).unwrap();
         fs::copy(
-            sdk.join("include/EthersyncClient.swift"),
-            sdk.join("swift-client/Ethersync.swift"),
+            sdk.join("include/TidkodClient.swift"),
+            sdk.join("swift-client/Tidkod.swift"),
         )
         .unwrap();
         fs::create_dir_all(sdk.join("swift-example")).unwrap();
@@ -167,18 +167,18 @@ fn main() {
             fs::read_to_string(repo.join("clients/bindings/examples/client.swift")).unwrap();
         fs::write(
             sdk.join("swift-example/main.swift"),
-            format!("import Ethersync\n{example}"),
+            format!("import Tidkod\n{example}"),
         )
         .unwrap();
         fs::write(sdk.join("Package.swift"),format!(r#"// swift-tools-version: 5.9
 import PackageDescription
-let package = Package(name: "Ethersync", platforms: [.macOS(.v13)], products: [.library(name: "Ethersync", targets: ["Ethersync"])], targets: [
-    .binaryTarget(name: "RustEthersync", path: "RustEthersync.xcframework"),
-    .target(name: "EthersyncSys", dependencies: ["RustEthersync"], path: "swift", linkerSettings: [.linkedLibrary("c++"), .linkedFramework("Security"), .linkedFramework("SystemConfiguration"), .linkedFramework("CoreFoundation")]),
-    .target(name: "Ethersync", dependencies: ["EthersyncSys"], path: "swift-client"),
-    .executableTarget(name: "EthersyncSmoke", dependencies: ["Ethersync"], path: "swift-example", swiftSettings: [{}])
+let package = Package(name: "Tidkod", platforms: [.macOS(.v13)], products: [.library(name: "Tidkod", targets: ["Tidkod"])], targets: [
+    .binaryTarget(name: "RustTidkod", path: "RustTidkod.xcframework"),
+    .target(name: "TidkodSys", dependencies: ["RustTidkod"], path: "swift", linkerSettings: [.linkedLibrary("c++"), .linkedFramework("Security"), .linkedFramework("SystemConfiguration"), .linkedFramework("CoreFoundation")]),
+    .target(name: "Tidkod", dependencies: ["TidkodSys"], path: "swift-client"),
+    .executableTarget(name: "TidkodSmoke", dependencies: ["Tidkod"], path: "swift-example", swiftSettings: [{}])
 ])
-"#,if variant=="native"{".define(\"ETHERSYNC_NATIVE\")"}else{""})).unwrap();
+"#,if variant=="native"{".define(\"TIDKOD_NATIVE\")"}else{""})).unwrap();
     }
     if generated.join("NativeMethods.g.cs").exists() {
         let dotnet = sdk.join("csharp");
@@ -188,19 +188,16 @@ let package = Package(name: "Ethersync", platforms: [.macOS(.v13)], products: [.
             dotnet.join("README.md"),
         )
         .unwrap();
-        let project = fs::read_to_string(repo.join("clients/csharp/Ethersync.csproj"))
+        let project = fs::read_to_string(repo.join("clients/csharp/Tidkod.csproj"))
             .unwrap()
-            .replace(
-                "../../target/debug/ethersync-generated/native",
-                "../include",
-            )
+            .replace("../../target/debug/tidkod-generated/native", "../include")
             .replace("../../target/debug", "../lib");
-        fs::write(dotnet.join("Ethersync.csproj"), project).unwrap();
+        fs::write(dotnet.join("Tidkod.csproj"), project).unwrap();
         let smoke = fs::read_to_string(repo.join("clients/csharp/Smoke/Smoke.csproj")).unwrap();
         let smoke = if variant == "core" {
             smoke.replace(
                 "<OutputType>",
-                "<EthersyncCoreOnly>true</EthersyncCoreOnly><OutputType>",
+                "<TidkodCoreOnly>true</TidkodCoreOnly><OutputType>",
             )
         } else {
             smoke
@@ -227,7 +224,7 @@ let package = Package(name: "Ethersync", platforms: [.macOS(.v13)], products: [.
         copy_tree(&repo.join(member), &source.join(member));
     }
     for file in [
-        "Ethersync.csproj",
+        "Tidkod.csproj",
         "Smoke/Smoke.csproj",
         "Smoke/Program.cs",
         "README.md",
@@ -253,7 +250,7 @@ let package = Package(name: "Ethersync", platforms: [.macOS(.v13)], products: [.
         ),
     )
     .unwrap();
-    if env::var_os("ETHERSYNC_SDK_SWIFT_DYLIB").is_some() {
+    if env::var_os("TIDKOD_SDK_SWIFT_DYLIB").is_some() {
         assert!(
             target.contains("apple-darwin"),
             "Swift dylibs currently target macOS"

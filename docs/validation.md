@@ -7,7 +7,7 @@ Run `scripts/check.sh` after installing the pinned schema tools listed in `.gith
 Run the network-dependent discovery test separately:
 
 ```sh
-cargo test -p libethersync --test mdns -- --ignored --nocapture
+cargo test -p tidkod --test mdns -- --ignored --nocapture
 ```
 
 It advertises two equal display names, checks distinct identities and usable endpoint/pin metadata, and observes goodbye removal after leader shutdown. It requires a multicast-capable interface; a failure here must be reported independently from direct QUIC functionality.
@@ -28,7 +28,7 @@ The simulation uses a reproducible linear-congruential random generator. The rep
 ## Two-computer Wi-Fi procedure
 
 1. Build the same checkout and Cargo.lock on two computers. Record hardware, OS, power mode, Rust version, Wi-Fi adapter/driver, AP model, band/channel, and the revision under test. Put both machines on the same LAN with client isolation disabled. Permit UDP 4443 and mDNS UDP 5353 in the host firewalls. Avoid suspend during the run.
-2. On computer A, run `cargo run --release -p libethersync --example leader -- --bind 0.0.0.0:4443 --fps 29.97 --drop-frame --start 107892`. Record its displayed certificate fingerprint and Wi-Fi IP. On B, run the follower with `--address A_WIFI_IP:4443 --pin FINGERPRINT --seconds 600`, saving stdout/stderr. Then repeat using discovery selection without `--address` and check that the same identity is shown.
+2. On computer A, run `cargo run --release -p tidkod --example leader -- --bind 0.0.0.0:4443 --fps 29.97 --drop-frame --start 107892`. Record its displayed certificate fingerprint and Wi-Fi IP. On B, run the follower with `--address A_WIFI_IP:4443 --pin FINGERPRINT --seconds 600`, saving stdout/stderr. Then repeat using discovery selection without `--address` and check that the same identity is shown.
 3. On A, issue `play`, `pause`, `seek 0`, `shuttle -1 1`, `shuttle 1 2`, and `at 1000 1800 0 1`. Confirm B acquires synchronization, changes discontinuities immediately on explicit commands, runs in the correct direction/rate, and reaches the scheduled paused position. Record acquisition time, uncertainty, sample age, offset/drift, RTT, and loss counters. Console labels are display diagnostics, not subframe measurements.
 4. While running at -1x, disconnect A from Wi-Fi for 30 seconds. B must enter holdover and continue in reverse with increasing uncertainty. Reconnect A and observe recovery. Repeat while paused; position must remain fixed. Restart the leader on the same port, exchange its new fingerprint through the trusted channel, and restart B with the new pin. For a separate trusted-LAN recovery test, omit `--pin` and verify that the existing follower reconnects and reinitializes on the new session. Confirm it never switches to another advertised leader.
 5. Run the tracked example on A for ten seconds and observe B's `Tracked/Healthy` → `Tracked/Degraded` → `Tracked/Healthy` transitions during the 3–5 second input gap. Timecode continues through the gap; later pause/reverse changes should appear immediately.
@@ -50,7 +50,7 @@ The 80-second symmetric-LAN simulations use seeds 7, 19, and 997, each at -200, 
 
 ## WASM portability, 2026-09-20
 
-The shared clock, timeline, and source-tracking tests now live in `ethersync-protocol`; the native
+The shared clock, timeline, and source-tracking tests now live in `tidkod-protocol`; the native
 client reuses those modules. `clients/wasm` depends only on that protocol crate and binding/serialization
 libraries. It builds for `wasm32-unknown-unknown`. The web pnpm tests execute the generated WASM in
 Node, covering protocol fixtures, malformed/version/size rejection, signed extrapolation, controls,
@@ -245,7 +245,7 @@ through Computer Use was blocked by that tool's app safety policy.
 
 ## Release pipeline validation, 2026-09-21
 
-After moving the native crate to `native/` and renaming it `libethersync`, local
+After moving the native crate to `native/` and renaming it `tidkod`, local
 workspace tests, strict Clippy, Rustdoc, schema checks, the protocol package build,
 all example smokes, and all 11 compiled-WASM/web tests passed. README files were
 checked against their original hashes and remain unchanged.

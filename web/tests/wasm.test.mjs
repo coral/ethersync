@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Follower } from '../pkg-node/ethersync_wasm.js';
+import { Follower } from '../pkg-node/tidkod_wasm.js';
 
 // Tiny fixture encoder, not production protocol code. Uses the authoritative schema's tags.
 const v = n => { n = BigInt(n); const b = []; do { b.push(Number(n & 127n) | (n > 127n ? 128 : 0)); n >>= 7n; } while(n); return b; };

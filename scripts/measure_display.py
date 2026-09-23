@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Measure native leader sampling cadence through a PTY, excluding screen/compositor latency.
-Run `cargo build -p libethersync --example leader` first. Uses only Python's standard library.
+Run `cargo build -p tidkod --example leader` first. Uses only Python's standard library.
 """
 import fcntl
 import json
@@ -43,7 +43,7 @@ try:
             buffer += payload.decode(errors="replace")
         except OSError:
             break
-        if not started and "ETHERSYNC / LEADER" in buffer:
+        if not started and "TIDKOD / LEADER" in buffer:
             os.write(master, b"tod\r" if tod else b"play\r")
             started = True
         end = 0

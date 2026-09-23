@@ -4,7 +4,7 @@ target/
 
 # Packaged SDKs and generated C/C++/Swift/C# bindings.
 dist/
-ethersync-generated/
+tidkod-generated/
 
 # Native compilation and CMake build output.
 build/

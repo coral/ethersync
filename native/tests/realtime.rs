@@ -1,6 +1,6 @@
-use libethersync::*;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
+use tidkod::*;
 struct CountAlloc;
 thread_local! {static ENABLED:Cell<bool>=const{Cell::new(false)};static COUNT:Cell<usize>=const{Cell::new(0)};}
 unsafe impl GlobalAlloc for CountAlloc {

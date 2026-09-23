@@ -1,8 +1,8 @@
-#include "ethersync-client.hpp"
+#include "tidkod-client.hpp"
 #include "check.h"
 #include <iostream>
 int main() {
-    namespace es = ethersync::client;
+    namespace es = tidkod::client;
     auto core = es::Core::create();
     CHECK(core.read(123).fps_numerator == 30);
     auto snapshot = es::TimecodeSnapshot::create();
@@ -13,7 +13,7 @@ int main() {
     CHECK(frozen.read_for_presentation(123, 1));
     auto bad = core.state({255}, 123);
     CHECK(!bad && !bad.error().empty());
-#ifdef ETHERSYNC_NATIVE
+#ifdef TIDKOD_NATIVE
     auto created = es::Engine::create();
     if (!created) { std::cerr << created.error(); return 1; }
     auto engine = created.take();

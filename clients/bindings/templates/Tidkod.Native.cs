@@ -2,8 +2,8 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
-using Sys = Ethersync.Sys;
-namespace Ethersync;
+using Sys = Tidkod.Sys;
+namespace Tidkod;
 
 public sealed partial class Endpoint
 {
@@ -31,8 +31,8 @@ public sealed unsafe partial class FollowerOptions
         using var value = Endpoint.From(endpoint);
         using var lease = new HandleLease(value.Handle);
         Sys.FollowerOptions* result = null;
-        Sys.EsBuffer* error = null;
-        Native.Check(Sys.NativeMethods.ethersync_follower_options_endpoint((Sys.Endpoint*)lease.Pointer, &result, &error), error);
+        Sys.TKBuffer* error = null;
+        Native.Check(Sys.NativeMethods.tidkod_follower_options_endpoint((Sys.Endpoint*)lease.Pointer, &result, &error), error);
         return result;
     }
 }

@@ -22,7 +22,7 @@ def check(tag=None, require_publishable=False):
             publishable.add(package["name"])
             for name in ["LICENSE-MIT", "LICENSE-APACHE"]:
                 assert (ROOT / member / name).read_bytes() == (ROOT / name).read_bytes()
-    assert publishable == {"ethersync-protocol", "libethersync"}, publishable
+    assert publishable == {"tidkod-protocol", "tidkod"}, publishable
     release = tomllib.loads((ROOT / "release.toml").read_text())
     assert release["tag-name"] == "v{{version}}"
     assert release["shared-version"] and release["consolidate-commits"]

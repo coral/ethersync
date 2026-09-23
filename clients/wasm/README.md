@@ -1,6 +1,6 @@
-# ethersync-wasm
+# tidkod-wasm
 
-A thin binding to `ethersync-protocol`, with no dependency on the native `ethersync` crate,
+A thin binding to `tidkod-protocol`, with no dependency on the native `tidkod` crate,
 Tokio, MoQ, Quinn, mDNS, or an operating-system clock. It does not create network connections.
 See [`web/README.md`](../../web/README.md) for the browser transport and application.
 

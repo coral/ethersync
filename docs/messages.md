@@ -3,30 +3,30 @@
 
 ## Table of Contents
 
-- [ethersync/v1/ethersync.proto](#ethersync_v1_ethersync-proto)
-    - [Anchor](#ethersync-v1-Anchor)
-    - [FrameFormat](#ethersync-v1-FrameFormat)
-    - [Position](#ethersync-v1-Position)
-    - [Probe](#ethersync-v1-Probe)
-    - [Rate](#ethersync-v1-Rate)
-    - [ScheduledChange](#ethersync-v1-ScheduledChange)
-    - [Snapshot](#ethersync-v1-Snapshot)
+- [tidkod/v1/tidkod.proto](#tidkod_v1_tidkod-proto)
+    - [Anchor](#tidkod-v1-Anchor)
+    - [FrameFormat](#tidkod-v1-FrameFormat)
+    - [Position](#tidkod-v1-Position)
+    - [Probe](#tidkod-v1-Probe)
+    - [Rate](#tidkod-v1-Rate)
+    - [ScheduledChange](#tidkod-v1-ScheduledChange)
+    - [Snapshot](#tidkod-v1-Snapshot)
 
-    - [SourceHealth](#ethersync-v1-SourceHealth)
-    - [SourceKind](#ethersync-v1-SourceKind)
+    - [SourceHealth](#tidkod-v1-SourceHealth)
+    - [SourceKind](#tidkod-v1-SourceKind)
 
 - [Scalar Value Types](#scalar-value-types)
 
 
 
-<a name="ethersync_v1_ethersync-proto"></a>
+<a name="tidkod_v1_tidkod-proto"></a>
 <p align="right"><a href="#top">Top</a></p>
 
-## ethersync/v1/ethersync.proto
+## tidkod/v1/tidkod.proto
 
 
 
-<a name="ethersync-v1-Anchor"></a>
+<a name="tidkod-v1-Anchor"></a>
 
 ### Anchor
 A complete trajectory, timestamped in leader monotonic nanoseconds.
@@ -35,15 +35,15 @@ A complete trajectory, timestamped in leader monotonic nanoseconds.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | time_ns | [uint64](#uint64) |  |  |
-| position | [Position](#ethersync-v1-Position) |  |  |
-| rate | [Rate](#ethersync-v1-Rate) |  |  |
+| position | [Position](#tidkod-v1-Position) |  |  |
+| rate | [Rate](#tidkod-v1-Rate) |  |  |
 
 
 
 
 
 
-<a name="ethersync-v1-FrameFormat"></a>
+<a name="tidkod-v1-FrameFormat"></a>
 
 ### FrameFormat
 Supported exact frame rate and display convention.
@@ -60,7 +60,7 @@ Supported exact frame rate and display convention.
 
 
 
-<a name="ethersync-v1-Position"></a>
+<a name="tidkod-v1-Position"></a>
 
 ### Position
 Signed unwrapped frames plus a nonnegative fraction in units of 2^-32 frames.
@@ -76,7 +76,7 @@ Signed unwrapped frames plus a nonnegative fraction in units of 2^-32 frames.
 
 
 
-<a name="ethersync-v1-Probe"></a>
+<a name="tidkod-v1-Probe"></a>
 
 ### Probe
 Private unreliable request/reply; response echoes sequence and t1.
@@ -95,7 +95,7 @@ Private unreliable request/reply; response echoes sequence and t1.
 
 
 
-<a name="ethersync-v1-Rate"></a>
+<a name="tidkod-v1-Rate"></a>
 
 ### Rate
 Signed rational playback multiplier; zero means paused.
@@ -111,7 +111,7 @@ Signed rational playback multiplier; zero means paused.
 
 
 
-<a name="ethersync-v1-ScheduledChange"></a>
+<a name="tidkod-v1-ScheduledChange"></a>
 
 ### ScheduledChange
 A retained future trajectory, applied exactly at anchor.time_ns.
@@ -120,14 +120,14 @@ A retained future trajectory, applied exactly at anchor.time_ns.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | discontinuity | [uint64](#uint64) |  |  |
-| anchor | [Anchor](#ethersync-v1-Anchor) |  |  |
+| anchor | [Anchor](#tidkod-v1-Anchor) |  |  |
 
 
 
 
 
 
-<a name="ethersync-v1-Snapshot"></a>
+<a name="tidkod-v1-Snapshot"></a>
 
 ### Snapshot
 One complete independent state group. Protocol v1 has no delta messages.
@@ -139,11 +139,11 @@ One complete independent state group. Protocol v1 has no delta messages.
 | session | [bytes](#bytes) |  |  |
 | revision | [uint64](#uint64) |  |  |
 | discontinuity | [uint64](#uint64) |  |  |
-| source_kind | [SourceKind](#ethersync-v1-SourceKind) |  |  |
-| source_health | [SourceHealth](#ethersync-v1-SourceHealth) |  |  |
-| format | [FrameFormat](#ethersync-v1-FrameFormat) |  |  |
-| anchor | [Anchor](#ethersync-v1-Anchor) |  |  |
-| scheduled | [ScheduledChange](#ethersync-v1-ScheduledChange) | repeated |  |
+| source_kind | [SourceKind](#tidkod-v1-SourceKind) |  |  |
+| source_health | [SourceHealth](#tidkod-v1-SourceHealth) |  |  |
+| format | [FrameFormat](#tidkod-v1-FrameFormat) |  |  |
+| anchor | [Anchor](#tidkod-v1-Anchor) |  |  |
+| scheduled | [ScheduledChange](#tidkod-v1-ScheduledChange) | repeated |  |
 
 
 
@@ -152,7 +152,7 @@ One complete independent state group. Protocol v1 has no delta messages.
 
 
 
-<a name="ethersync-v1-SourceHealth"></a>
+<a name="tidkod-v1-SourceHealth"></a>
 
 ### SourceHealth
 Health of the timecode source, independent of connection health.
@@ -165,7 +165,7 @@ Health of the timecode source, independent of connection health.
 
 
 
-<a name="ethersync-v1-SourceKind"></a>
+<a name="tidkod-v1-SourceKind"></a>
 
 ### SourceKind
 Source provenance does not change when external input disappears.
