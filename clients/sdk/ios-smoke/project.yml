@@ -18,6 +18,11 @@ targets:
     type: application
     platform: iOS
     sources: [App.swift]
+    info:
+      path: Info.plist
+      properties:
+        NSBonjourServices: ["_tidkod._udp"]
+        NSLocalNetworkUsageDescription: Discover and synchronize timecode with local devices.
     settings:
       base:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

@@ -304,6 +304,7 @@ pub struct FollowerOptions {
 pub struct Leader {
     inner: tidkod::Leader,
     _engine: std::sync::Arc<tidkod::Engine>,
+    advertisement: tidkod::LeaderConfig,
 }
 #[cfg(feature = "native")]
 pub struct Follower {
@@ -380,6 +381,7 @@ pub fn engine_leader(engine: &Engine, options: &LeaderOptions) -> Result<Leader>
     Ok(Leader {
         inner: engine.inner.leader(options.inner.clone()).map_err(error)?,
         _engine: engine.inner.clone(),
+        advertisement: options.inner.clone(),
     })
 }
 #[cfg(feature = "native")]
@@ -1119,5 +1121,135 @@ pub fn leader_rotate_session_id(leader: &Leader) -> Result<SessionId> {
     Ok(SessionId {
         high: u64::from_be_bytes(id[..8].try_into().unwrap()),
         low: u64::from_be_bytes(id[8..].try_into().unwrap()),
+    })
+}
+
+/// Platform-adapter factory. Retains the requested advertisement configuration,
+/// but delegates registration to the caller rather than starting Rust mDNS.
+#[cfg(feature = "native")]
+pub fn engine_leader_external_discovery(
+    engine: &Engine,
+    options: &LeaderOptions,
+) -> Result<Leader> {
+    let mut config = options.inner.clone();
+    config.advertise = false;
+    Ok(Leader {
+        inner: engine.inner.leader(config).map_err(error)?,
+        _engine: engine.inner.clone(),
+        advertisement: options.inner.clone(),
+    })
+}
+/// Immutable registration metadata; reading it never starts a discovery daemon.
+#[cfg(feature = "native")]
+pub struct LeaderAdvertisement {
+    config: tidkod::LeaderConfig,
+    info: tidkod::LeaderInfo,
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement(leader: &Leader) -> LeaderAdvertisement {
+    LeaderAdvertisement {
+        config: leader.advertisement.clone(),
+        info: leader.inner.info().clone(),
+    }
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement_enabled(info: &LeaderAdvertisement) -> bool {
+    info.config.advertise
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement_name(info: &LeaderAdvertisement) -> String {
+    info.config.name.clone()
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement_identity(info: &LeaderAdvertisement) -> String {
+    info.info.identity.clone()
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement_fingerprint(info: &LeaderAdvertisement) -> String {
+    info.info.fingerprint.clone()
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement_bind_address(info: &LeaderAdvertisement) -> String {
+    info.info.address.to_string()
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement_hostname(info: &LeaderAdvertisement) -> String {
+    let id: String = info
+        .info
+        .session
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("tidkod-{id}.local.")
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement_instance(info: &LeaderAdvertisement) -> String {
+    let mut name = info.config.name.clone();
+    while name.len() > 54 {
+        name.pop();
+    }
+    let suffix: String = info.info.session[..4]
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("{name}-{suffix}")
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement_interface_count(info: &LeaderAdvertisement) -> u32 {
+    info.config.discovery.interfaces.len() as u32
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement_interface(info: &LeaderAdvertisement, index: u32) -> Result<String> {
+    info.config
+        .discovery
+        .interfaces
+        .get(index as usize)
+        .cloned()
+        .ok_or_else(|| "interface index".into())
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement_address_count(info: &LeaderAdvertisement) -> u32 {
+    info.config.discovery.addresses.len() as u32
+}
+#[cfg(feature = "native")]
+pub fn leader_advertisement_address(info: &LeaderAdvertisement, index: u32) -> Result<String> {
+    info.config
+        .discovery
+        .addresses
+        .get(index as usize)
+        .map(ToString::to_string)
+        .ok_or_else(|| "address index".into())
+}
+#[cfg(feature = "native")]
+pub fn discovery_options_interface_count(options: &DiscoveryOptions) -> u32 {
+    options.inner.interfaces.len() as u32
+}
+#[cfg(feature = "native")]
+pub fn discovery_options_interface_name(options: &DiscoveryOptions, index: u32) -> Result<String> {
+    options
+        .inner
+        .interfaces
+        .get(index as usize)
+        .cloned()
+        .ok_or_else(|| "interface index".into())
+}
+/// Use the same discovered-endpoint validation for platform-owned discovery.
+#[cfg(feature = "native")]
+pub fn follower_options_resolved(
+    address: &str,
+    fingerprint: &str,
+    version: u32,
+) -> Result<FollowerOptions> {
+    let address = address.parse().map_err(error)?;
+    let discovered = tidkod::DiscoveredLeader {
+        service_name: String::new(),
+        identity: String::new(),
+        name: String::new(),
+        protocol_version: version,
+        addresses: vec![address],
+        fingerprint: fingerprint.into(),
+    };
+    Ok(FollowerOptions {
+        inner: tidkod::FollowerConfig::discovered(&discovered, address).map_err(error)?,
     })
 }

@@ -174,6 +174,19 @@ def test_sdk(path):
         if "apple" in target:
             run("swift", "run", "--package-path", sdk, "-c", "release", "TidkodSmoke", env=env, timeout=180)
             run(sdk / "swift-dylib/TidkodSmoke", cwd=work, env=env, timeout=30)
+            if variant == "native":
+                # Compile the shipped adapter with its private OS-boundary tests.
+                # The optional real multicast tests use the very same executable.
+                swift_test = work / "BonjourTests.swift"
+                swift_test.write_text((sdk / "swift-client/Tidkod.swift").read_text() + "\n" +
+                                      (sdk / "source/clients/bindings/tests/bonjour.swift").read_text())
+                run("swiftc", "-O", "-parse-as-library", swift_test,
+                    "-I", sdk / "swift-dylib", "-I", sdk / "swift-c",
+                    "-L", sdk / "swift-dylib", "-lTidkodSys",
+                    "-Xlinker", "-rpath", "-Xlinker", sdk / "swift-dylib",
+                    "-Xlinker", "-rpath", "-Xlinker", sdk / "lib",
+                    "-o", work / "BonjourTests", env=env, timeout=180)
+                run(work / "BonjourTests", cwd=work, env=env, timeout=120)
         # The extracted sources must be independently usable, with the supplied lockfile.
         run("cargo", "check", "--manifest-path", sdk / "source/Cargo.toml", "-p", "tidkod-bindings",
             "--locked", "--no-default-features", "--features", "c,cpp,csharp" + (",native" if variant == "native" else ""),

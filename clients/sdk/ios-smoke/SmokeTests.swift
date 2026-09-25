@@ -16,6 +16,7 @@ final class SmokeTests: XCTestCase {
         options.advertise(enabled: false)
         options.bind(to: try .loopback(port: .any))
         let leader = try engine.leader(options: options)
+        XCTAssertEqual(leader.advertisementStatus, .disabled)
         let endpoints = try leader.localEndpoints()
         XCTAssertEqual(endpoints.count(), 1)
         XCTAssertGreaterThan(try endpoints.get(index: 0).port(), 0)

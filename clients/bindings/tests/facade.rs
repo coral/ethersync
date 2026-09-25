@@ -1,4 +1,45 @@
 use tidkod_bindings::api::*;
+#[cfg(feature = "native")]
+#[test]
+fn external_discovery_captures_actual_listener_without_mutating_options() {
+    let engine = engine_new().unwrap();
+    let mut options = leader_options_new();
+    leader_options_name(&mut options, &"é".repeat(30));
+    leader_options_identity(&mut options, "apple-adapter-test");
+    leader_options_bind_endpoint(&mut options, &endpoint_loopback(0).unwrap());
+    let leader = engine_leader_external_discovery(&engine, &options).unwrap();
+    let info = leader_advertisement(&leader);
+    assert!(leader_advertisement_enabled(&info));
+    assert_eq!(leader_advertisement_identity(&info), "apple-adapter-test");
+    assert_eq!(
+        leader_advertisement_bind_address(&info),
+        endpoint_address(&leader_endpoint(&leader))
+    );
+    assert_ne!(endpoint_port(&leader_endpoint(&leader)), 0);
+    assert_eq!(
+        leader_advertisement_fingerprint(&info),
+        leader_fingerprint(&leader)
+    );
+    assert!(leader_advertisement_instance(&info).len() <= 63);
+    let host = leader_advertisement_hostname(&info);
+    leader_rotate_session_id(&leader).unwrap();
+    assert_eq!(
+        host,
+        leader_advertisement_hostname(&leader_advertisement(&leader))
+    );
+    leader_options_name(&mut options, "changed");
+    let second = engine_leader_external_discovery(&engine, &options).unwrap();
+    assert!(leader_advertisement_enabled(&leader_advertisement(&second)));
+    assert_ne!(
+        host,
+        leader_advertisement_hostname(&leader_advertisement(&second))
+    );
+    assert_eq!(leader_advertisement_name(&info), "é".repeat(30));
+    assert!(follower_options_resolved("127.0.0.1:4443", &leader_fingerprint(&leader), 2).is_err());
+    assert!(follower_options_resolved("hostname:4443", &leader_fingerprint(&leader), 1).is_err());
+    assert!(follower_options_resolved("[fe80::1%7]:4443", &leader_fingerprint(&leader), 1).is_ok());
+    engine_shutdown(&engine).unwrap();
+}
 #[test]
 fn timecode_arithmetic_is_exact_and_validates_labels() {
     assert!(timecode_format_new(25, 1, true).is_err());

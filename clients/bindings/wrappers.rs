@@ -119,6 +119,11 @@ pub fn generate(
             s += "}\n";
         }
         for t in opaque {
+            // The native Swift SDK owns system Bonjour. The low-level Rust/C ABI
+            // remains generated unchanged; Discovery's Swift surface is adapted.
+            if t == "Discovery" {
+                continue;
+            }
             let declaration = if t == "Endpoint" {
                 "struct"
             } else {
@@ -127,11 +132,21 @@ pub fn generate(
             s += &format!(
                 "/// Owned handle. Serialize access; this type is deliberately not Sendable.\npublic {declaration} {t} {{ fileprivate let raw: TidkodSys.{t}\nfileprivate init(raw: TidkodSys.{t}) {{ self.raw = raw }}\n"
             );
+            if t == "Engine" {
+                s += "fileprivate let bonjour = BonjourContext()\n";
+            }
+            if t == "Leader" {
+                s += "fileprivate var bonjourAdvertisement: BonjourAdvertisement?\npublic var advertisementStatus: BonjourStatus { bonjourAdvertisement?.status ?? .disabled }\ndeinit { bonjourAdvertisement?.stop() }\n";
+            }
             for f in functions
                 .iter()
                 .filter(|f| owner(&f.sig.ident.to_string()) == *t)
             {
                 let name = f.sig.ident.to_string();
+                if name == "engine_leader_external_discovery" {
+                    // Adapter SPI remains available in TidkodSys, not the normal SDK.
+                    continue;
+                }
                 let method = name.strip_prefix(&(snake(t) + "_")).unwrap();
                 let a = args(f);
                 let instance = a
@@ -164,6 +179,32 @@ pub fn generate(
                         typ(&ret)
                     )
                 };
+                let adapter = match name.as_str() {
+                    "engine_leader" => Some(
+                        "try bonjour.checkRunning()\nlet leader = Leader(raw: try checked { try TidkodSys.engine_leader_external_discovery(raw, options.raw) })\ndo { leader.bonjourAdvertisement = try bonjour.advertise(leader.advertisement()); return leader } catch { try? leader.shutdown(); throw error }\n",
+                    ),
+                    "engine_discovery" => Some(
+                        "return try Discovery(context: bonjour, engine: raw, interfaces: [])\n",
+                    ),
+                    "engine_discovery_configured" => Some(
+                        "let interfaces = try (0..<options.interfaceCount()).map { try options.interfaceName(index: $0) }\nreturn try Discovery(context: bonjour, engine: raw, interfaces: interfaces)\n",
+                    ),
+                    "follower_options_discovered" => Some(
+                        "return try discovery.resolvedOptions(index: index, addressIndex: addressIndex)\n",
+                    ),
+                    _ => None,
+                };
+                if let Some(body) = adapter {
+                    s += body;
+                    s += "}\n";
+                    continue;
+                }
+                if name == "engine_shutdown" {
+                    s += "bonjour.shutdown()\n";
+                }
+                if name == "leader_shutdown" {
+                    s += "bonjourAdvertisement?.stop()\n";
+                }
                 let callargs = a
                     .iter()
                     .enumerate()
@@ -220,6 +261,7 @@ pub fn generate(
             s += include_str!("templates/Endpoint.swift");
         }
         if opaque.contains("Engine") {
+            s += include_str!("templates/Bonjour.swift");
             s += include_str!("templates/PresentationReader.swift");
         }
         fs::write(dir.join("TidkodClient.swift"), s).unwrap();
