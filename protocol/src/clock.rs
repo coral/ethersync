@@ -111,6 +111,9 @@ pub struct ClockEstimator {
     trace: VecDeque<ClockObservation>,
 }
 impl ClockEstimator {
+    pub fn recovering(&self) -> bool {
+        !self.recovery.is_empty()
+    }
     pub fn mapping(&self) -> ClockMapping {
         self.mapping
     }

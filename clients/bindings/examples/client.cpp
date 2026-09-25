@@ -11,6 +11,13 @@ int main() {
     CHECK(frozen.read(123).accepted_observations == 0);
     CHECK(!frozen.next_boundary(123).valid);
     CHECK(frozen.read_for_presentation(123, 1));
+    CHECK(frozen.read_sample(123, 48000, 48000));
+    auto bridge = es::ClockBridge::create(100, 10000, 110);
+    CHECK(bridge);
+    auto output_time = bridge.value().convert(10100);
+    CHECK(output_time && output_time.value().local_ns == 205);
+    CHECK(!bridge.value().convert(0));
+    CHECK(!es::Core::build_id().empty());
     auto bad = core.state({255}, 123);
     CHECK(!bad && !bad.error().empty());
 #ifdef TIDKOD_NATIVE

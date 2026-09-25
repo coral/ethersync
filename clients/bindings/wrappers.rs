@@ -219,6 +219,9 @@ pub fn generate(
         if opaque.contains("Endpoint") {
             s += include_str!("templates/Endpoint.swift");
         }
+        if opaque.contains("Engine") {
+            s += include_str!("templates/PresentationReader.swift");
+        }
         fs::write(dir.join("TidkodClient.swift"), s).unwrap();
     }
     if std::env::var_os("CARGO_FEATURE_CPP").is_some() {

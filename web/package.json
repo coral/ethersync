@@ -11,6 +11,7 @@
     "check": "pnpm wasm && tsc --noEmit",
     "test": "pnpm wasm && node --test tests/*.test.mjs",
     "measure": "pnpm wasm && node scripts/measure-accuracy.mjs",
+    "measure:browser": "pnpm wasm && node scripts/measure-browser.mjs",
     "replay": "pnpm wasm && node scripts/replay-trace.mjs",
     "analyze": "node scripts/analyze-trace.mjs"
   },

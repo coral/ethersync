@@ -10,7 +10,9 @@
 //! engine.shutdown()?;
 //! # Ok::<(), tidkod::Error>(())
 //! ```
+pub use tidkod_protocol::CORE_BUILD_ID;
 pub use tidkod_protocol::{Boundary, BoundaryKind, FrameFormat, Label, Position, Rate};
+pub use tidkod_protocol::{ClockBridge, OutputTime, sample_time};
 mod api;
 pub use tidkod_protocol::clock;
 mod discovery;

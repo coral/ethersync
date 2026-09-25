@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Follower } from '../pkg-node/tidkod_wasm.js';
+import { Follower, PresentationClock, core_build_id } from '../pkg-node/tidkod_wasm.js';
 
 // Tiny fixture encoder, not production protocol code. Uses the authoritative schema's tags.
 const v = n => { n = BigInt(n); const b = []; do { b.push(Number(n & 127n) | (n > 127n ? 128 : 0)); n >>= 7n; } while(n); return b; };
@@ -27,6 +27,46 @@ function sync(f, offset = 5000, start = 1000) {
   }
   return start + 1204;
 }
+test('steady-state correction, quality and sample output use the shared core', () => {
+  const f = new Follower();
+  let snapshot;
+  try {
+    f.connected(); f.snapshot(state(), 0);
+    const now = sync(f);
+    const before = f.read(now);
+    f.snapshot(state({ rev: 2, time: 20_000_000 }), now);
+    assert.equal(f.read(now).frames, before.frames);
+    assert.equal(f.read(now).aligned, false);
+    assert.ok(f.read(now).alignmentErrorMs >= 20);
+    assert.equal(f.probe_interval_at(now), 50);
+    for (let i = 1; i <= 10; i++) f.snapshot(state({ rev: i + 2, time: 20_000_000 }), now + i * 100);
+    const reading = f.read(now + 1000);
+    assert.ok(Math.abs(reading.correctionFrames) / 30 * 1000 < 1);
+    assert.equal(reading.resyncGeneration, before.resyncGeneration);
+    snapshot = f.capture_snapshot();
+    assert.deepEqual(snapshot.read_sample(now, 48000n, 48000), snapshot.read(now + 1000));
+    assert.throws(() => snapshot.read_sample(now, 1n, 0));
+    assert.match(core_build_id(), /^\d+\.\d+\.\d+\/[0-9a-f]{16}$/);
+  } finally { snapshot?.free(); f.free(); }
+});
+test('browser presentation estimator resets on gaps and never targets a past deadline', () => {
+  const clock = new PresentationClock();
+  try {
+    assert.equal(clock.target(0, 1).estimated, false);
+    let target;
+    for (let i = 1; i <= 16; i++) target = clock.target(i * 16, i * 16 + 1);
+    assert.equal(target.localMs, 272);
+    assert.equal(target.refreshMs, 16);
+    assert.equal(target.estimated, true);
+    target = clock.target(272, 300);
+    assert.equal(target.localMs, 300);
+    assert.equal(target.missed, true);
+    assert.equal(clock.target(2000, 2001).estimated, false);
+    assert.throws(() => clock.target(NaN, 0));
+    clock.reset();
+    assert.equal(clock.target(2016, 2017).estimated, false);
+  } finally { clock.free(); }
+});
 test('actual WASM decodes golden fixture, validates version, size, timestamps', () => {
   const f = new Follower();
   try {

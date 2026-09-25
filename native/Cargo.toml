@@ -39,6 +39,9 @@ path = "examples/follower.rs"
 [[example]]
 name = "tracked"
 path = "examples/tracked.rs"
+[[example]]
+name = "accuracy"
+path = "examples/accuracy.rs"
 
 [dev-dependencies]
 moq-net = "0.2.22"

@@ -3,6 +3,8 @@
 These additions live in `tidkod-protocol` and are shared by native and WASM clients.
 They do not change the protobuf schema, the four-timestamp exchange, or the current point
 estimator. They add local scheduling and evidence needed to evaluate further algorithm changes.
+For the precision correction default, alignment readiness, output-clock bridges and
+sample evaluation, see [synchronization acceptance](synchronization-acceptance.md).
 
 ## Application timestamps and immutable snapshots
 
@@ -65,7 +67,7 @@ exact decimal string `acceptedObservations`.
 
 The count describes accepted exchanges, not statistical independence, recency, or measured
 physical accuracy. Applications may require a minimum count alongside synchronization,
-uncertainty, and source-health criteria. Existing convergence and correction rules are unchanged.
+uncertainty, and source-health criteria. This counter itself does not change convergence or correction.
 `offset_evidence.samples` still counts currently retained interval-support observations, and
 the bounded diagnostic trace still includes rejections; neither is an acquisition counter.
 

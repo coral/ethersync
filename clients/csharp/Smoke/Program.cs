@@ -22,6 +22,12 @@ using (var core = new Core())
     Check(copied.Read(123).AcceptedObservations == 0, "snapshot count");
     Check(!copied.NextBoundary(123).Valid, "fallback snapshot boundary");
     Check(copied.ReadForPresentation(123, TimeSpan.FromMilliseconds(1)).Frames == initial.Frames, "snapshot presentation");
+    Check(copied.ReadSample(123, 48000, 48000).Frames == initial.Frames, "sample phase");
+    Check(!copied.Read(123).Aligned, "uninitialized alignment");
+    using var bridge = new ClockBridge(100, 10000, 110);
+    var outputTime = bridge.Convert(10100);
+    Check(outputTime.LocalNs == 205 && outputTime.UncertaintyNs >= 5, "host clock bridge");
+    Check(Core.BuildId().Length > 0, "core build identity");
     try { core.State(new byte[] {255}, 123); throw new Exception("bad protobuf accepted"); }
     catch (TidkodException e) { Check(e.Status != 0 && e.Message.Length > 0, "managed error"); }
     core.Connected();

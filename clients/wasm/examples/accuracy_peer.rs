@@ -18,6 +18,10 @@ fn output(s: String) {
     out.flush().unwrap();
 }
 fn main() {
+    if std::env::args().any(|s| s == "--direct") {
+        direct();
+        return;
+    }
     let engine = Engine::new().unwrap();
     let leader = engine
         .leader(LeaderConfig {
@@ -89,5 +93,103 @@ fn main() {
             }
         }
     });
+    engine.shutdown().unwrap();
+}
+
+// A real browser connects directly to this leader. The pipe is ONLY an independent
+// reference, never a relay for the browser's synchronization messages.
+fn direct() {
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
+    use tidkod::{FollowerConfig, SourceKind, SourceSample};
+    let tracked = std::env::args().any(|s| s == "--tracked");
+    let engine = Engine::new().unwrap();
+    let leader = engine
+        .leader(LeaderConfig {
+            bind: "127.0.0.1:0".parse().unwrap(),
+            advertise: false,
+            source_kind: if tracked {
+                SourceKind::Tracked
+            } else {
+                SourceKind::Generated
+            },
+            rate: Rate::NORMAL,
+            ..Default::default()
+        })
+        .unwrap();
+    let mut reader = leader.reader().unwrap();
+    let remote = Engine::new().unwrap();
+    let follower = remote
+        .follower(FollowerConfig::direct(leader.info().address))
+        .unwrap();
+    let mut native = follower.reader().unwrap();
+    let instant = Instant::now();
+    let epoch_delta = i128::from(remote.clock().ns_at(instant).unwrap())
+        - i128::from(engine.clock().ns_at(instant).unwrap());
+    let (tx, rx) = std::sync::mpsc::sync_channel(64);
+    std::thread::spawn(move || {
+        for line in std::io::stdin().lock().lines() {
+            if tx.send(line.unwrap()).is_err() {
+                break;
+            }
+        }
+    });
+    output(format!(
+        "READY {} {} {}",
+        leader.info().address,
+        leader.info().fingerprint,
+        tidkod::CORE_BUILD_ID
+    ));
+    let mut next_source = Instant::now();
+    let mut first = true;
+    let deadline = Instant::now() + Duration::from_secs(7200);
+    while Instant::now() < deadline {
+        if tracked && Instant::now() >= next_source {
+            let before = engine.clock().now_ns();
+            let wall = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                % 86_400_000_000_000;
+            let after = engine.clock().now_ns();
+            leader
+                .track(SourceSample {
+                    timestamp_ns: before + (after - before) / 2,
+                    position: Position::ZERO.advance(wall as i64, Default::default(), Rate::NORMAL),
+                    rate_hint: Some(Rate::NORMAL),
+                    discontinuity: first,
+                })
+                .unwrap();
+            first = false;
+            next_source = Instant::now() + Duration::from_millis(50);
+        }
+        let line = match rx.recv_timeout(Duration::from_millis(5)) {
+            Ok(line) => line,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(_) => break,
+        };
+        let parts: Vec<_> = line.split_whitespace().collect();
+        match parts.as_slice() {
+            ["CAL", id] => output(format!("CAL {id} {}", engine.clock().now_ns())),
+            ["READ", id, at] => {
+                let at: u64 = at.parse().unwrap();
+                let a = reader.read_at(at);
+                let b = native.read_at((i128::from(at) + epoch_delta).try_into().unwrap());
+                output(format!(
+                    "READ {id} {} {} {} {} {} {} {} {}",
+                    a.position.frames,
+                    a.position.subframe,
+                    a.discontinuity,
+                    b.position.frames,
+                    b.position.subframe,
+                    b.status.correction_frames,
+                    b.status.offset_ns,
+                    b.status.resync_generation
+                ));
+            }
+            ["QUIT"] => break,
+            _ => panic!("bad direct fixture command"),
+        }
+    }
+    remote.shutdown().unwrap();
     engine.shutdown().unwrap();
 }

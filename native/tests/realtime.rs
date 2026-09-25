@@ -46,6 +46,7 @@ fn reader_is_allocation_free_and_slots_are_reclaimed() {
         std::hint::black_box(r.read_at(base + i * 1000));
         let snapshot = r.snapshot();
         std::hint::black_box(snapshot.evaluate(base + i * 1000));
+        std::hint::black_box(snapshot.evaluate_sample(base, i, 48000).unwrap());
         std::hint::black_box(snapshot.evaluate_for_presentation(base, i * 1000).unwrap());
         std::hint::black_box(
             r.read_for_presentation_at(base + i * 1000, std::time::Duration::from_millis(20))

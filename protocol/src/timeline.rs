@@ -223,6 +223,14 @@ pub struct Status {
     /// Accepted clock observations in the current acquisition; zero on a leader.
     /// This is neither the retained-history count nor an independent accuracy guarantee.
     pub accepted_observations: u64,
+    /// Estimated position error in nominal frame-time nanoseconds, including slew.
+    /// Excludes source timestamp error and physical output latency.
+    pub alignment_error_ns: f64,
+    /// Healthy, current synchronization with estimated timeline error <= 1 ms.
+    /// An engineering assessment, not an independent accuracy measurement.
+    pub aligned: bool,
+    /// Persistent local counter of hard realignments, including initial acquisition.
+    pub resync_generation: u64,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Reading {
@@ -285,6 +293,10 @@ pub struct View {
     pub correction_at: u64,
     pub slew_frames_per_second: f64,
     pub correction_discontinuity: u64,
+    pub resync_generation: u64,
+    /// Leader readers use their own clock; no remote-clock uncertainty accumulates.
+    pub local_clock: bool,
+    pub recovering: bool,
 }
 impl Default for View {
     fn default() -> Self {
@@ -301,6 +313,9 @@ impl Default for View {
             correction_at: 0,
             slew_frames_per_second: 0.03,
             correction_discontinuity: 0,
+            resync_generation: 0,
+            local_clock: false,
+            recovering: false,
         }
     }
 }
@@ -338,6 +353,17 @@ impl View {
         };
         position = Position::from_fixed(position.fixed() + (remaining * 4294967296.) as i128);
         let initialized = self.mapping.last_sample_ns != 0;
+        let uncertainty_ns = if self.local_clock {
+            0.
+        } else {
+            self.mapping.uncertainty_at(local)
+        };
+        let alignment_error_ns = if initialized {
+            uncertainty_ns * rate.as_f64().abs()
+                + remaining.abs() / self.timeline.format.fps() * 1e9
+        } else {
+            f64::INFINITY
+        };
         Reading {
             session_id: self.timeline.session_id,
             position: if initialized {
@@ -361,7 +387,7 @@ impl View {
                 },
                 source_kind: self.timeline.source_kind,
                 source_health: self.timeline.source_health,
-                uncertainty_ns: self.mapping.uncertainty_at(local),
+                uncertainty_ns,
                 correction_frames: if initialized { remaining } else { 0. },
                 offset_evidence: self.mapping.evidence.map(|e| e.at(local)),
                 sample_age_ns: local.saturating_sub(self.mapping.last_sample_ns),
@@ -370,6 +396,15 @@ impl View {
                 drift_ppm: self.mapping.drift * 1e6,
                 lost_packets: self.lost_packets,
                 accepted_observations: self.mapping.accepted_observations,
+                alignment_error_ns,
+                aligned: initialized
+                    && self.connection == ConnectionState::Connected
+                    && self.sync == SyncState::Synchronized
+                    && !self.recovering
+                    && self.timeline.source_health == SourceHealth::Healthy
+                    && self.mapping.evidence.is_none_or(|e| e.consistent())
+                    && alignment_error_ns <= 1_000_000.,
+                resync_generation: self.resync_generation,
             },
         }
     }
@@ -385,6 +420,9 @@ pub fn presentation_time(local: u64, compensation_delay_ns: u64) -> Result<u64, 
 }
 #[derive(Clone, Copy, Debug)]
 pub struct CorrectionPolicy {
+    /// Desired correction settling time. Zero selects the legacy fixed slew.
+    pub settle_time_ns: u64,
+    /// Used only when settle_time_ns is zero. Both modes are capped to 10% of motion.
     pub slew_frames_per_second: f64,
     pub hard_threshold_frames: f64,
     pub confirmations: u8,
@@ -392,6 +430,16 @@ pub struct CorrectionPolicy {
 impl Default for CorrectionPolicy {
     fn default() -> Self {
         Self {
+            settle_time_ns: 250_000_000,
+            ..Self::legacy()
+        }
+    }
+}
+impl CorrectionPolicy {
+    /// Previous continuity-first correction, retained for explicit opt-in.
+    pub fn legacy() -> Self {
+        Self {
+            settle_time_ns: 0,
             slew_frames_per_second: 0.03,
             hard_threshold_frames: 1.,
             confirmations: 3,
@@ -464,6 +512,7 @@ impl FollowerCore {
             self.large = 0;
             self.large_sign = 0;
             self.ever_locked = false;
+            self.view.recovering = false;
         }
         let changed = new || t.at(self.view.mapping.leader_time(now)).2 != before.discontinuity;
         self.view.timeline = t;
@@ -471,6 +520,9 @@ impl FollowerCore {
             self.large = 0;
             self.large_sign = 0;
             self.view.correction_frames = 0.;
+            if new {
+                self.view.resync_generation = self.view.resync_generation.saturating_add(1);
+            }
             return Some(if new {
                 Correction::NewSession
             } else {
@@ -492,11 +544,16 @@ impl FollowerCore {
         processed_ns: u64,
     ) -> Option<Correction> {
         self.expected_session?;
-        let before = self.view.evaluate(e.t4);
-        if !self
+        // Keep the estimator's original receipt timestamp, but apply the new
+        // correction where processing starts. Backdating a slew to a queued t4
+        // would make newly published output jump by already "completed" correction.
+        let now = processed_ns.max(e.t4);
+        let before = self.view.evaluate(now);
+        let accepted = self
             .estimator
-            .observe_timed(e, publication_ns, processed_ns)
-        {
+            .observe_timed(e, publication_ns, processed_ns);
+        self.view.recovering = self.estimator.recovering();
+        if !accepted {
             return None;
         }
         let acquired = self.ever_locked;
@@ -512,20 +569,21 @@ impl FollowerCore {
         // Include the first converged estimate in acquisition so lock starts aligned.
         if !acquired {
             self.view.correction_frames = 0.;
-            let desired = self.view.timeline.at(self.view.mapping.leader_time(e.t4)).0;
+            self.view.resync_generation = self.view.resync_generation.saturating_add(1);
+            let desired = self.view.timeline.at(self.view.mapping.leader_time(now)).0;
             return Some(Correction::HardResync {
                 frames: (desired.fixed() - before.position.fixed()) as f64 / 4294967296.,
             });
         }
-        if self.view.timeline.at(self.view.mapping.leader_time(e.t4)).2 != before.discontinuity {
+        if self.view.timeline.at(self.view.mapping.leader_time(now)).2 != before.discontinuity {
             self.large = 0;
             self.large_sign = 0;
             self.view.correction_frames = 0.;
-            let disc = self.view.timeline.at(self.view.mapping.leader_time(e.t4)).2;
+            let disc = self.view.timeline.at(self.view.mapping.leader_time(now)).2;
             self.reported_discontinuity = Some((self.view.timeline.session, disc));
             return Some(Correction::Discontinuity(disc));
         }
-        self.correct(before.position, e.t4, true)
+        self.correct(before.position, now, true)
     }
     fn correct(&mut self, before: Position, now: u64, measurement: bool) -> Option<Correction> {
         let (desired, _, disc) = self.view.timeline.at(self.view.mapping.leader_time(now));
@@ -542,15 +600,26 @@ impl FollowerCore {
             if self.large >= self.policy.confirmations {
                 self.large = 0;
                 self.view.correction_frames = 0.;
+                self.view.resync_generation = self.view.resync_generation.saturating_add(1);
                 return Some(Correction::HardResync { frames: -error });
             }
         } else {
             self.large = 0;
         }
         self.view.correction_frames = error;
+        self.view.slew_frames_per_second = if self.policy.settle_time_ns == 0 {
+            self.policy.slew_frames_per_second
+        } else {
+            error.abs() * 1e9 / self.policy.settle_time_ns as f64
+        };
         self.view.correction_at = now;
         self.view.correction_discontinuity = disc;
         Some(Correction::Slew { frames: -error })
+    }
+    /// Shared native/browser cadence decision. Rejections that indicate a possible
+    /// changed clock/path must not wait at the steady cadence to collect evidence.
+    pub fn needs_fast_probes(&self, now: u64) -> bool {
+        self.estimator.recovering() || !self.view.evaluate(now).status.aligned
     }
     pub fn tick(&mut self, now: u64, stale_after: u64) -> Option<Correction> {
         if self.view.mapping.last_sample_ns == 0 {
@@ -666,6 +735,7 @@ mod tests {
     #[test]
     fn bounded_slew_and_three_measurement_resync() {
         let mut c = core();
+        c.policy = CorrectionPolicy::legacy();
         let mut t = c.view.timeline;
         t.revision += 1;
         t.anchor.position = Position::from_fixed(t.anchor.position.fixed() + (1 << 30));

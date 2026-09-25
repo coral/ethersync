@@ -82,13 +82,16 @@ impl View {
             discontinuity: self.evaluate(deadline).discontinuity,
             kind,
             // Slew can reduce phase velocity by at most 10%; controls do not slew.
-            uncertainty_ns: self.mapping.uncertainty_at(deadline)
-                / (1. + self.mapping.drift
-                    - if kind == BoundaryKind::Frame && r.status.correction_frames != 0. {
-                        0.1
-                    } else {
-                        0.
-                    }),
+            uncertainty_ns: (if self.local_clock {
+                0.
+            } else {
+                self.mapping.uncertainty_at(deadline)
+            }) / (1. + self.mapping.drift
+                - if kind == BoundaryKind::Frame && r.status.correction_frames != 0. {
+                    0.1
+                } else {
+                    0.
+                }),
         })
     }
 }

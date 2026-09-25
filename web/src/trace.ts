@@ -37,7 +37,7 @@ export function instrument(core: Follower, enabled: boolean) {
       if (!enabled) return;
       if (wallReferences.length === 256) wallReferences.shift();
       wallReferences.push(sample);
-    }, export: () => ({ version: 1, timestampDomain: 'performance.now milliseconds',
+    }, export: () => ({ version: 1, coreBuildId: core.build_id(), timestampDomain: 'performance.now milliseconds',
     wallReferences,
     enabled, prefixComplete: omitted === 0, omitted, records,
     // The suffix is diagnostic only; replay uses the retained complete prefix above.

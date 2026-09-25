@@ -1,10 +1,14 @@
 //! Thin browser binding; parsing and synchronization live in tidkod-protocol.
 use tidkod_protocol::{
-    CorrectionPolicy, SyncState, decode_snapshot,
+    CorrectionPolicy, decode_snapshot,
     probes::Probes,
     timeline::{FollowerCore, Timeline, View},
 };
 use wasm_bindgen::prelude::*;
+#[wasm_bindgen]
+pub fn core_build_id() -> String {
+    tidkod_protocol::CORE_BUILD_ID.into()
+}
 
 fn timestamp(ms: f64) -> Result<u64, JsValue> {
     if !ms.is_finite() || !(0.0..=9_223_372_036_854.0).contains(&ms) {
@@ -26,6 +30,9 @@ pub struct Follower {
 }
 #[wasm_bindgen]
 impl Follower {
+    pub fn build_id(&self) -> String {
+        core_build_id()
+    }
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
@@ -33,6 +40,12 @@ impl Follower {
             probes: Probes::default(),
             last_event: String::new(),
         }
+    }
+    /// Explicit compatibility with the original slow fixed-slew policy.
+    pub fn legacy() -> Self {
+        let mut follower = Self::new();
+        follower.core.policy = CorrectionPolicy::legacy();
+        follower
     }
     pub fn connecting(&mut self) {
         self.core.view.connection = tidkod_protocol::ConnectionState::Connecting;
@@ -125,11 +138,24 @@ impl Follower {
     }
 
     pub fn probe_interval_ms(&self) -> u32 {
-        if self.core.view.sync == SyncState::Synchronized {
-            250
-        } else {
+        if self.core.needs_fast_probes(
+            self.core
+                .view
+                .mapping
+                .last_sample_ns
+                .max(self.core.view.correction_at),
+        ) {
             50
+        } else {
+            250
         }
+    }
+    pub fn probe_interval_at(&self, now_ms: f64) -> Result<u32, JsValue> {
+        Ok(if self.core.needs_fast_probes(timestamp(now_ms)?) {
+            50
+        } else {
+            250
+        })
     }
     pub fn read(&mut self, now_ms: f64) -> Result<JsValue, JsValue> {
         self.read_for_presentation(now_ms, 0.)
@@ -205,6 +231,76 @@ impl TimecodeSnapshot {
     pub fn next_boundary(&self, now_ms: f64) -> Result<JsValue, JsValue> {
         serialize_boundary(self.view, now_ms)
     }
+    pub fn read_sample(
+        &self,
+        origin_ms: f64,
+        sample_index: u64,
+        sample_rate: u32,
+    ) -> Result<JsValue, JsValue> {
+        let at = tidkod_protocol::sample_time(timestamp(origin_ms)?, sample_index, sample_rate)
+            .map_err(error)?;
+        serialize_reading(self.view, at, 0, &self.event)
+    }
+}
+
+/// Browser-owned refresh estimate, NOT a compositor presentation timestamp.
+/// Feed rAF's timestamp and performance.now() from the same callback. A gap
+/// resets the estimate; late callbacks never predict into the past.
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct PresentationClock {
+    previous: Option<f64>,
+    intervals: [f64; 32],
+    count: usize,
+}
+#[wasm_bindgen]
+impl PresentationClock {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+    pub fn target(&mut self, frame_ms: f64, now_ms: f64) -> Result<JsValue, JsValue> {
+        timestamp(frame_ms)?;
+        timestamp(now_ms)?;
+        if let Some(previous) = self.previous {
+            let interval = frame_ms - previous;
+            if !(1. ..=100.).contains(&interval) {
+                self.reset();
+            } else {
+                self.intervals[self.count % 32] = interval;
+                self.count = self.count.saturating_add(1);
+            }
+        }
+        self.previous = Some(frame_ms);
+        let n = self.count.min(32);
+        let mut intervals = self.intervals;
+        intervals[..n].sort_by(f64::total_cmp);
+        let estimated = n >= 8;
+        let period = if estimated { intervals[n / 2] } else { 0. };
+        let target = frame_ms + period;
+        #[derive(serde::Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Target {
+            local_ms: f64,
+            estimated: bool,
+            missed: bool,
+            refresh_ms: f64,
+        }
+        serde_wasm_bindgen::to_value(&Target {
+            local_ms: if estimated {
+                target.max(now_ms)
+            } else {
+                now_ms
+            },
+            estimated,
+            missed: estimated && target < now_ms,
+            refresh_ms: period,
+        })
+        .map_err(error)
+    }
 }
 
 fn serialize_boundary(view: View, now_ms: f64) -> Result<JsValue, JsValue> {
@@ -239,6 +335,8 @@ fn serialize_reading(view: View, now: u64, delay: u64, event: &str) -> Result<Js
         session_id: Option<String>,
         label: String,
         frames: f64,
+        whole_frames: String,
+        subframe: u32,
         speed: f64,
         fps: f64,
         connection: String,
@@ -251,6 +349,9 @@ fn serialize_reading(view: View, now: u64, delay: u64, event: &str) -> Result<Js
         drift_ppm: f64,
         mapped_leader_ms: f64,
         correction_frames: f64,
+        alignment_error_ms: f64,
+        aligned: bool,
+        resync_generation: String,
         offset_evidence: Option<Evidence>,
         accepted_observations: String,
         discontinuity: String,
@@ -270,6 +371,8 @@ fn serialize_reading(view: View, now: u64, delay: u64, event: &str) -> Result<Js
         }),
         label: r.label().to_string(),
         frames: r.position.fixed() as f64 / 4294967296.,
+        whole_frames: r.position.frames.to_string(),
+        subframe: r.position.subframe,
         speed: r.rate.as_f64(),
         fps: r.format.fps(),
         connection: format!("{:?}", s.connection),
@@ -282,6 +385,9 @@ fn serialize_reading(view: View, now: u64, delay: u64, event: &str) -> Result<Js
         drift_ppm: s.drift_ppm,
         mapped_leader_ms: view.mapping.leader_time(presentation) as f64 / 1e6,
         correction_frames: s.correction_frames,
+        alignment_error_ms: s.alignment_error_ns / 1e6,
+        aligned: s.aligned,
+        resync_generation: s.resync_generation.to_string(),
         offset_evidence: s.offset_evidence.map(Evidence::from),
         accepted_observations: s.accepted_observations.to_string(),
         discontinuity: r.discontinuity.to_string(),

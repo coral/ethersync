@@ -19,6 +19,8 @@
 pub mod boundary;
 pub use boundary::{Boundary, BoundaryKind};
 pub mod clock;
+pub mod output;
+pub use output::{ClockBridge, OutputTime, sample_time};
 pub mod probes;
 pub mod timeline;
 pub mod tracking;
@@ -41,6 +43,8 @@ pub mod wire {
 }
 pub const DESCRIPTOR: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/tidkod.bin"));
 pub const VERSION: u32 = 1;
+/// Package version and deterministic core-source identity; not a wire version.
+pub const CORE_BUILD_ID: &str = concat!(env!("CARGO_PKG_VERSION"), "/", env!("TIDKOD_CORE_ID"));
 pub const MAX_MESSAGE: usize = 512;
 pub const MAX_SCHEDULED: usize = 4;
 

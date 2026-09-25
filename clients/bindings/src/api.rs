@@ -93,6 +93,9 @@ pub struct Reading {
     pub offset_evidence_reference_ns: u64,
     pub offset_evidence_samples: u32,
     pub accepted_observations: u64,
+    pub alignment_error_ns: f64,
+    pub aligned: bool,
+    pub resync_generation: u64,
 }
 impl From<timeline::Reading> for Reading {
     fn from(r: timeline::Reading) -> Self {
@@ -135,6 +138,9 @@ impl From<timeline::Reading> for Reading {
             offset_evidence_reference_ns: s.offset_evidence.map_or(0, |e| e.reference_ns),
             offset_evidence_samples: s.offset_evidence.map_or(0, |e| e.samples),
             accepted_observations: s.accepted_observations,
+            alignment_error_ns: s.alignment_error_ns,
+            aligned: s.aligned,
+            resync_generation: s.resync_generation,
         }
     }
 }
@@ -178,6 +184,14 @@ pub fn core_reply(core: &mut Core, bytes: &[u8], receipt_ns: u64) -> Result<()> 
 pub fn core_tick(core: &mut Core, now_ns: u64, stale_after_ns: u64) {
     core.core.tick(now_ns, stale_after_ns);
 }
+/// Acquisition/correction/recovery cadence shared with native and browser clients.
+pub fn core_probe_interval_ns(core: &Core, now_ns: u64) -> u64 {
+    if core.core.needs_fast_probes(now_ns) {
+        50_000_000
+    } else {
+        250_000_000
+    }
+}
 pub fn core_read(core: &Core, now_ns: u64) -> Reading {
     core.core.view.evaluate(now_ns).into()
 }
@@ -200,6 +214,9 @@ pub fn timecode_snapshot_new() -> TimecodeSnapshot {
         inner: Default::default(),
     }
 }
+pub fn core_build_id() -> String {
+    protocol::CORE_BUILD_ID.into()
+}
 pub fn timecode_snapshot_copy(snapshot: &TimecodeSnapshot) -> TimecodeSnapshot {
     TimecodeSnapshot {
         inner: snapshot.inner,
@@ -207,6 +224,46 @@ pub fn timecode_snapshot_copy(snapshot: &TimecodeSnapshot) -> TimecodeSnapshot {
 }
 pub fn timecode_snapshot_read(snapshot: &TimecodeSnapshot, now_ns: u64) -> Reading {
     snapshot.inner.evaluate(now_ns).into()
+}
+pub fn timecode_snapshot_read_sample(
+    snapshot: &TimecodeSnapshot,
+    origin_ns: u64,
+    sample_index: u64,
+    sample_rate: u32,
+) -> Result<Reading> {
+    Ok(snapshot
+        .inner
+        .evaluate_sample(origin_ns, sample_index, sample_rate)
+        .map_err(error)?
+        .into())
+}
+
+/// Epoch bridge for same-rate host timestamps, not an independent device clock.
+pub struct ClockBridge {
+    inner: protocol::ClockBridge,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct OutputTime {
+    pub local_ns: u64,
+    pub uncertainty_ns: f64,
+}
+pub fn clock_bridge_new(
+    local_before_ns: u64,
+    external_ns: u64,
+    local_after_ns: u64,
+) -> Result<ClockBridge> {
+    Ok(ClockBridge {
+        inner: protocol::ClockBridge::new(local_before_ns, external_ns, local_after_ns)
+            .map_err(error)?,
+    })
+}
+pub fn clock_bridge_convert(bridge: &ClockBridge, external_ns: u64) -> Result<OutputTime> {
+    let time = bridge.inner.convert(external_ns).map_err(error)?;
+    Ok(OutputTime {
+        local_ns: time.local_ns,
+        uncertainty_ns: time.uncertainty_ns,
+    })
 }
 pub fn timecode_snapshot_read_for_presentation(
     snapshot: &TimecodeSnapshot,
@@ -664,6 +721,7 @@ pub fn follower_options_correction(
     confirmations: u32,
 ) -> Result<()> {
     options.inner.correction = timeline::CorrectionPolicy {
+        settle_time_ns: 0,
         slew_frames_per_second,
         hard_threshold_frames,
         confirmations: confirmations.try_into().map_err(error)?,
@@ -908,6 +966,7 @@ pub fn core_configured(
         core: timeline::FollowerCore::new(
             fallback,
             timeline::CorrectionPolicy {
+                settle_time_ns: 0,
                 slew_frames_per_second,
                 hard_threshold_frames,
                 confirmations,

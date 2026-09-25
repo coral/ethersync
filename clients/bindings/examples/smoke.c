@@ -19,6 +19,14 @@ int main(void) {
     CHECK(tidkod_timecode_snapshot_next_boundary(snapshot, 123, &boundary, &error) == 0);
     CHECK(!boundary.valid);
     CHECK(tidkod_timecode_snapshot_read_for_presentation(snapshot, 123, 1, &value, &error) == 0);
+    CHECK(tidkod_timecode_snapshot_read_sample(snapshot, 123, 48000, 48000, &value, &error) == 0);
+    CHECK(!value.aligned);
+    ClockBridge *bridge = NULL;
+    OutputTime output_time;
+    CHECK(tidkod_clock_bridge_new(100, 10000, 110, &bridge, &error) == 0);
+    CHECK(tidkod_clock_bridge_convert(bridge, 10100, &output_time, &error) == 0);
+    CHECK(output_time.local_ns == 205 && output_time.uncertainty_ns >= 5);
+    tidkod_clockbridge_free(bridge);
     const uint8_t bad[] = {255};
     CHECK(tidkod_core_state(core, bad, sizeof(bad), 123, &error) != 0);
     CHECK(error && tidkod_buffer_len(error) > 0);

@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { Follower } from '../pkg-node/tidkod_wasm.js';
+import { Follower, core_build_id } from '../pkg-node/tidkod_wasm.js';
 export function replay(trace) {
   assert.equal(trace.version, 1);
+  if (trace.coreBuildId !== undefined) assert.equal(trace.coreBuildId, core_build_id(), 'Replay requires the same core build');
   assert.equal(trace.enabled, true, 'This export has diagnostics only: replay capture was disabled. Reload without ?trace=0 for a complete capture.');
   assert.ok(Array.isArray(trace.records) && trace.records.length <= 16384);
   const allowed = new Set(['connecting', 'connected', 'disconnected', 'snapshot', 'probe',

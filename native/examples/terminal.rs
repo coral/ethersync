@@ -160,8 +160,14 @@ impl Terminal {
                     reading.status.rtt_ns as f64 / 1e6
                 ));
                 body.push(format!(
-                    "Timeline adjustment {:+.6} frames",
-                    reading.status.correction_frames
+                    "Timeline adjustment {:+.6} frames   {} ({:.3} ms estimated)",
+                    reading.status.correction_frames,
+                    if reading.status.aligned {
+                        "Aligned"
+                    } else {
+                        "Outside 1 ms budget"
+                    },
+                    reading.status.alignment_error_ns / 1e6
                 ));
                 body.push(format!(
                     "Clock offset {:+.3} ms   Drift {:+.1} ppm",

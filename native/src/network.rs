@@ -258,6 +258,7 @@ impl Peer {
 }
 fn leader_view(t: Timeline, now: u64) -> View {
     View {
+        local_clock: true,
         timeline: t,
         mapping: clock::ClockMapping {
             reference_ns: now,
@@ -812,10 +813,10 @@ impl FollowerJob {
                 self.core.view.rtt_ns = stats.rtt.map_or(0, |d| d.as_nanos() as u64);
                 self.core.view.lost_packets = stats.packets_lost.unwrap_or(0);
                 self.next_probe = Instant::now()
-                    + if self.core.view.sync == SyncState::Synchronized {
-                        self.config.timing.steady_probe
-                    } else {
+                    + if self.core.needs_fast_probes(self.clock.now_ns()) {
                         self.config.timing.acquisition_probe
+                    } else {
+                        self.config.timing.steady_probe
                     };
             }
         }

@@ -63,6 +63,7 @@ fn exact_large_position_and_allocation_free_portable_reads() {
         std::hint::black_box(core_next_boundary(&core, i));
         core_snapshot_into(&core, &mut snapshot);
         std::hint::black_box(timecode_snapshot_read(&snapshot, i));
+        std::hint::black_box(timecode_snapshot_read_sample(&snapshot, i, i, 48000).unwrap());
         std::hint::black_box(timecode_snapshot_read_for_presentation(&snapshot, i, 1).unwrap());
         std::hint::black_box(timecode_snapshot_next_boundary(&snapshot, i));
     }

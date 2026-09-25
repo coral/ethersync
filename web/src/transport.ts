@@ -98,7 +98,7 @@ export async function follow(
           const payload = core.probe(performance.now());
           requests.appendDatagram(stamp, payload);
           core.probe_published(performance.now());
-          await delay(core.probe_interval_ms(), attempt.signal);
+          await delay(core.probe_interval_at(performance.now()), attempt.signal);
         }
       };
       const statsLoop = async () => {

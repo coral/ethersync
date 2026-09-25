@@ -1,4 +1,4 @@
-import init, { Follower } from '../pkg/tidkod_wasm';
+import init, { Follower, PresentationClock } from '../pkg/tidkod_wasm';
 import { endpoint, fingerprint, follow, type Diagnostics } from './transport';
 import './style.css';
 import { instrument } from './trace';
@@ -21,6 +21,7 @@ interface Reading {
   connection: string; synchronization: string; source: string; health: string;
   uncertaintyMs: number; sampleAgeMs: number; offsetMs: number; driftPpm: number;
   mappedLeaderMs: number; correctionFrames: number;
+  aligned: boolean; alignmentErrorMs: number; resyncGeneration: string;
   offsetEvidence?: { lowerMs: number; upperMs: number; consistent: boolean; samples: number };
   acceptedObservations: string; discontinuity: string; event: string;
 }
@@ -29,6 +30,7 @@ try {
   await init();
   const capture = instrument(new Follower(), new URLSearchParams(location.search).get('trace') !== '0');
   const core = capture.follower;
+  const presentation = new PresentationClock();
   element('export-trace').addEventListener('click', () => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(capture.export())], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = url; a.download = 'tidkod-timing.json'; a.click();
@@ -71,14 +73,17 @@ try {
   });
   window.addEventListener('pagehide', () => active?.abort());
   document.addEventListener('visibilitychange', () => {
+    presentation.reset();
     put('visibility', document.hidden ? 'Tab hidden: browser timers may be throttled.' : 'Keep this tab visible for timing tests.');
   });
-  function render() {
+  function render(frameMs: number) {
     const before = performance.now();
     const wallUtcMs = Date.now();
     const after = performance.now();
     const localMs = (before + after) / 2;
     const r = core.read(localMs) as Reading;
+    const target = presentation.target(frameMs, after) as { localMs: number; estimated: boolean; missed: boolean };
+    const displayed = core.read_for_presentation(after, target.localMs - after) as Reading;
     const wallDate = new Date(wallUtcMs);
     const timezoneOffsetMinutes = wallDate.getTimezoneOffset();
     put('system-time', `${String(wallDate.getHours()).padStart(2,'0')}:${String(wallDate.getMinutes()).padStart(2,'0')}:${String(wallDate.getSeconds()).padStart(2,'0')}.${String(wallDate.getMilliseconds()).padStart(3,'0')}`);
@@ -88,9 +93,9 @@ try {
       discontinuity: r.discontinuity, differenceMs });
     put('tod-reference', r.synchronization !== 'Uninitialized' && r.speed === 1
       ? `${differenceMs >= 0 ? '+' : ''}${differenceMs.toFixed(3)} ms (positive = timecode ahead)` : 'Requires initialized +1× playback');
-    put('timecode', r.label);
-    put('state', `${r.connection} / ${r.synchronization}`);
-    element('state').dataset.synced = String(r.synchronization === 'Synchronized');
+    put('timecode', displayed.label);
+    put('state', `${r.connection} / ${r.aligned ? 'Aligned' : r.synchronization === 'Synchronized' ? 'Timing outside 1 ms budget' : r.synchronization}`);
+    element('state').dataset.synced = String(r.aligned);
     put('trajectory', `${r.fps.toFixed(3).replace(/\.000$/, '')} fps · ${r.speed.toFixed(3)}×`);
     put('uncertainty', fmt(r.uncertaintyMs, 'ms')); put('drift', fmt(r.driftPpm, 'ppm', 1));
     put('age', fmt(r.sampleAgeMs / 1000, 's', 2)); put('offset', fmt(r.offsetMs, 'ms'));
@@ -102,5 +107,5 @@ try {
     put('discontinuity', r.discontinuity); put('event', r.event || '—');
     requestAnimationFrame(render);
   }
-  render();
+  requestAnimationFrame(render);
 } catch (e) { put('message', String(e)); }

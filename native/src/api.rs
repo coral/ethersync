@@ -319,6 +319,7 @@ impl Engine {
             || !p.hard_threshold_frames.is_finite()
             || p.hard_threshold_frames <= 0.
             || p.confirmations == 0
+            || p.settle_time_ns > 3_600_000_000_000
         {
             return Err(Error::Invalid("correction policy"));
         }
