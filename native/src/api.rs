@@ -17,6 +17,12 @@ impl MonotonicClock {
     /// Convert an Instant exactly into this engine's monotonic nanosecond domain.
     /// Returns None before the origin or beyond the supported signed nanosecond range.
     pub fn ns_at(self, instant: Instant) -> Option<u64> {
+        // Windows duration subtraction clamps small negative differences to zero
+        // within its performance-counter tolerance. Check ordering separately so
+        // even a mark one nanosecond before the origin is rejected.
+        if instant < self.0 {
+            return None;
+        }
         let ns = instant.checked_duration_since(self.0)?.as_nanos();
         (ns <= i64::MAX as u128).then_some(ns as u64)
     }
